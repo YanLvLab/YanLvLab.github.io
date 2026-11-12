@@ -1,0 +1,17 @@
+# never publish: raw X API responses, review lists, daily inbox
+raw/
+review/
+inbox/
+# caches
+__pycache__/
+*.pyc
+scripts/__pycache__/
+.DS_Store
+# secrets — tokens are only read from the environment
+.env
+.env.*
+*.pem
+*.key
+*token*
+*secret*
+.git-credentials

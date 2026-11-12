@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>YLL·Hara — AI 时尚影像作品集</title>
+<meta name="description" content="YLL·Hara（@GenRyoma）的 AI 生图作品集：时装写真、夜拍、新中式、泳装与城市日常，每件作品附提示词。每日同步自 X。">
+<meta name="theme-color" content="#0b0b0d">
+<!-- robots:start --><!-- robots:end -->
+<link rel="canonical" href="https://yanlvlab.github.io/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="YLL·Hara Portfolio">
+<meta property="og:title" content="YLL·Hara — AI 时尚影像作品集">
+<meta property="og:description" content="AI 时尚影像 · AI Fashion Portrait。时装写真、夜拍、新中式，每件作品附提示词。每日同步自 X @GenRyoma。">
+<meta property="og:url" content="https://yanlvlab.github.io/">
+<meta property="og:image" content="https://yanlvlab.github.io/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="YLL·Hara · @GenRyoma · AI 时尚影像 · AI Fashion Portrait">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@GenRyoma">
+<meta name="twitter:creator" content="@GenRyoma">
+<meta name="twitter:title" content="YLL·Hara — AI 时尚影像作品集">
+<meta name="twitter:description" content="AI 时尚影像 · AI Fashion Portrait。每件作品附提示词，每日同步自 X @GenRyoma。">
+<meta name="twitter:image" content="https://yanlvlab.github.io/og.jpg">
+<link rel="icon" href="images/avatar.jpg">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="hero" id="hero">
+  <div class="hero-bg" id="heroBg"></div>
+  <div class="hero-inner">
+    <img class="avatar" id="avatar" src="images/avatar.jpg" alt="YLL·Hara 头像" width="112" height="112">
+    <div class="hero-text">
+      <p class="eyebrow">AI Fashion Portrait · Portfolio</p>
+      <h1 id="name">YLL·Hara</h1>
+      <a class="handle" id="handle" href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a>
+      <p class="bio" id="bio"></p>
+      <div class="stats" id="stats"></div>
+      <a class="btn-x" href="https://x.com/GenRyoma" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        在 X 上关注</a>
+    </div>
+  </div>
+</header>
+
+<nav class="toolbar" id="toolbar" aria-label="筛选与排序">
+  <div class="chips" id="chips" role="tablist"></div>
+  <label class="sort">
+    <span>排序</span>
+    <select id="sort">
+      <option value="new">最新发布</option>
+      <option value="hot">最高曝光</option>
+      <option value="likes">最多点赞</option>
+      <option value="bookmarks">最多收藏</option>
+      <option value="old">最早发布</option>
+    </select>
+  </label>
+</nav>
+
+<main>
+  <div class="grid" id="grid" aria-live="polite"></div>
+  <p class="empty" id="empty" hidden>这个系列暂时没有作品。</p>
+  <noscript><p class="empty">请启用 JavaScript 浏览作品集。</p></noscript>
+</main>
+
+<footer class="footer">
+  <p>最后更新时间：<time id="updated">—</time>（上海时间）</p>
+  <p class="muted">作品均来自 <a href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a> 的公开帖子，图像为 AI 生成，人物均为虚构的成年模特。</p>
+</footer>
+
+<div class="lightbox" id="lb" role="dialog" aria-modal="true" aria-label="作品详情" hidden>
+  <button class="lb-close" id="lbClose" aria-label="关闭">×</button>
+  <button class="lb-nav lb-prev" id="lbPrev" aria-label="上一张">‹</button>
+  <button class="lb-nav lb-next" id="lbNext" aria-label="下一张">›</button>
+  <div class="lb-stage" id="lbStage">
+    <img id="lbImg" alt="">
+    <div class="lb-dots" id="lbDots"></div>
+  </div>
+  <aside class="lb-panel">
+    <time class="lb-date" id="lbDate"></time>
+    <h2 class="lb-caption" id="lbCaption"></h2>
+    <div class="lb-tags" id="lbTags"></div>
+    <div class="lb-metrics" id="lbMetrics"></div>
+    <section class="lb-prompt" id="lbPromptWrap">
+      <div class="lb-prompt-head"><span>提示词</span><button id="lbCopy" type="button">复制</button></div>
+      <pre id="lbPrompt"></pre>
+    </section>
+    <a class="btn-x wide" id="lbLink" target="_blank" rel="noopener">在 X 上查看 ↗</a>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateText" hidden>
+  <div class="gate-box">
+    <p class="eyebrow">YLL·Hara</p>
+    <p id="gateText"></p>
+    <div class="gate-actions"><button id="gateYes" type="button"></button><a id="gateNo" href="https://x.com/GenRyoma"></a></div>
+  </div>
+</div>
+<script src="assets/app.js" defer></script>
+</body>
+</html>
