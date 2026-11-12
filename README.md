@@ -93,10 +93,13 @@ X 数据只能通过 Grok Bot 的 X MCP 工具读取（仓库里不存任何 API
 3. 合并：`python3 scripts/update.py --input inbox/<D>-*posts*.json inbox/<D>-*replies*.json inbox/<D>-*full*.json [--profile inbox/<D>-profile.json]`
    - 只追加尚未收录、且通过提示词规则的帖子（下载原图 + 缩略图）；已收录的刷新互动数；不再合规或被 hidden 的移除并删图；
    - 更新 `last_updated`，套用 `site.config.json`，不改 `og.jpg`；打印一行 JSON 摘要（added / dropped / posts / images / uncertain …）。
-4. 发布：`GITHUB_TOKEN=… scripts/publish.sh --no-update`
+4. 发布：`scripts/publish.sh --no-update`
    （或直接 `scripts/publish.sh`：它会自己按当天日期找 `inbox/<D>-*.json` 跑第 3 步，再发布）。
    - 有变化才 `git commit` 并 `git push` 到 `YanLvLab/YanLvLab.github.io` 的 `main`；没变化什么都不做；
-   - 令牌只在运行时从环境变量 `GITHUB_TOKEN` 读取（通过一次性 credential helper），不写入任何文件或 remote URL；
+   - 令牌：优先用环境变量 `GITHUB_TOKEN`，缺失或无效（`/user` 不返回 200）时回退读取 `~/.secrets/github_token`
+     （仓库之外，权限 600；可用 `GITHUB_TOKEN_FILE` 指定别的路径）。只在运行时通过一次性 credential helper 使用，
+     不打印、不写入任何文件或 remote URL；
+   - 若没有新改动但本地 `main` 还没推上 GitHub，也会补推一次；
    - 推送前会检查 `raw/`、`review/`、`inbox/` 都被 `.gitignore` 排除，否则拒绝发布。
 5. 汇报：把 update.py 的摘要和 publish.sh 输出的提交 sha 报给主人；`uncertain` 不为 0 时附上 `review/excluded.json` 里的待复核条目。
 
