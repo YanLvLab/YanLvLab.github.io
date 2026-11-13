@@ -47,28 +47,19 @@
     <div class="fog fog-a" aria-hidden="true"></div>
     <div class="pillar pillar-l" aria-hidden="true"></div>
     <div class="pillar pillar-r" aria-hidden="true"></div>
-    <p class="cover-issue"><span id="issueVol">VOL. I</span><span id="issueDate">—</span><span>异世界时尚 · Otherworld Couture</span></p>
-    <h1 class="masthead" aria-label="YLL·Hara 作品集"><span class="mh-small">YLL·</span>HARA</h1>
+    <h1 class="visually-hidden">YLL·Hara 作品集</h1>
     <div class="cover-figure" id="coverFigure">
       <button class="cover-img" id="coverBtn" type="button" aria-label="打开封面作品">
         <img id="coverImg" alt="" fetchpriority="high" decoding="async">
       </button>
     </div>
-    <div class="cover-lines cover-lines-l">
-      <p class="cl-kicker">本期特辑</p>
-      <p class="cl-big">巨人殿</p>
-      <p class="cl-it">The Hall of Giants</p>
-      <p class="cl-sub" id="coverStats">—</p>
-    </div>
-    <div class="cover-lines cover-lines-r" id="coverFeatures"></div>
-    <p class="cover-caption" id="coverCaption"></p>
-    <a class="cover-enter" href="#atrium"><span>步入殿堂</span><i>Enter the Hall</i><b aria-hidden="true"></b></a>
+    <a class="cover-enter" href="#letter"><span>向下滑动</span><b aria-hidden="true"></b></a>
   </section>
 
   <!-- II. EDITOR'S LETTER -->
-  <section class="letter" aria-label="卷首语">
+  <section class="letter" id="letter" aria-label="卷首语">
     <p class="letter-kicker">Editor’s Letter · 卷首语</p>
-    <p class="letter-text">你走进来的时候，她们已经站在这里很久了。<br>这是一座按巨人尺度建造的殿堂：每一件作品都比你高，每一行提示词都是她们的出生证明。</p>
+    <p class="letter-text">每一幅作品旁都留有一段咒语，那是召唤她们的方式。</p>
     <div class="letter-meta">
       <img class="avatar" id="avatar" src="images/avatar.jpg" alt="YLL·Hara 头像" width="64" height="64" loading="lazy">
       <div><b id="name">YLL·Hara</b><a id="handle" href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a><p class="bio" id="bio"></p></div>
@@ -106,7 +97,7 @@
       <label class="sort"><span>排序</span>
         <select id="sort">
           <option value="new">最新发布</option>
-          <option value="hot">最高曝光</option>
+          <option value="hot" selected>最高曝光</option>
           <option value="likes">最多点赞</option>
           <option value="bookmarks">最多收藏</option>
           <option value="old">最早发布</option>
@@ -118,6 +109,20 @@
     <noscript><p class="empty">请启用 JavaScript 浏览作品集。</p></noscript>
   </section>
 </main>
+
+<div class="sorter" id="sorter" aria-hidden="true">
+  <ul class="sorter-menu" id="sorterMenu" role="listbox" aria-label="排序方式" hidden>
+    <li><button type="button" role="option" data-sort="new" aria-selected="false">最新发布</button></li>
+    <li><button type="button" role="option" data-sort="hot" aria-selected="true">最高曝光</button></li>
+    <li><button type="button" role="option" data-sort="likes" aria-selected="false">最多点赞</button></li>
+    <li><button type="button" role="option" data-sort="bookmarks" aria-selected="false">最多收藏</button></li>
+    <li><button type="button" role="option" data-sort="old" aria-selected="false">最早发布</button></li>
+  </ul>
+  <button class="sorter-toggle" id="sorterBtn" type="button" aria-expanded="false" aria-haspopup="listbox" aria-controls="sorterMenu">
+    <span class="sorter-kicker">Sort · 排序</span>
+    <span class="sorter-now" id="sorterNow">最高曝光</span>
+  </button>
+</div>
 
 <footer class="colophon">
   <p class="colo-mark">HARA</p>

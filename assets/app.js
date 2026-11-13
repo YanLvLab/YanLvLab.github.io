@@ -100,11 +100,19 @@
   }
 
   let CFG = null, DATA = null, ALL = [], NO = new Map(), HALLS = [];
-  let archiveFilter = "全部", archiveSort = "new", archiveView = [];
+  const SORTS = { new: "最新发布", hot: "最高曝光", likes: "最多点赞", bookmarks: "最多收藏", old: "最早发布" };
+  const SORT_KEY = "hara_sort";
+  const FEATURED = { new: "最新之作", hot: "镇殿之作", likes: "最多点赞", bookmarks: "最多收藏", old: "最早之作" };
+  const readSort = () => {
+    try { const v = localStorage.getItem(SORT_KEY); if (v && SORTS[v]) return v; } catch {}
+    return "hot";
+  };
+  let archiveFilter = "全部", archiveSort = readSort(), archiveView = [];
   let ctx = { list: [], label: "" }, cur = -1, img = 0, lastFocus = null, navToken = 0;
   let locks = 0;
-  const lock = () => { if (++locks === 1) document.body.classList.add("lock"); };
-  const unlock = () => { locks = Math.max(0, locks - 1); if (!locks) document.body.classList.remove("lock"); };
+  let refreshSorter = () => {};
+  const lock = () => { if (++locks === 1) document.body.classList.add("lock"); refreshSorter(); };
+  const unlock = () => { locks = Math.max(0, locks - 1); if (!locks) document.body.classList.remove("lock"); refreshSorter(); };
 
   // ---------- build halls
   function buildHalls() {
@@ -134,7 +142,7 @@
     const rank = (n) => CHARACTERS.includes(n) ? -10 + CHARACTERS.indexOf(n) : n === "偏殿" ? 999 : (order.indexOf(n) < 0 ? 500 : order.indexOf(n));
     halls.sort((a, b) => rank(a.name) - rank(b.name));
     halls.forEach((h, i) => {
-      h.posts.sort((a, b) => (b.metrics.impressions || 0) - (a.metrics.impressions || 0) || newest(a, b));
+      h.posts = sortPosts(h.posts);
       h.id = "hall-" + (i + 1); h.roman = ROMAN[i + 1] || String(i + 1); h.en = EN[h.name] || h.name;
       h.label = CHARACTERS.includes(h.name) ? "人物殿 · Character" : h.merged ? "偏殿 · Lesser Halls" : "系列殿 · Series";
     });
@@ -160,15 +168,10 @@
     document.documentElement.dataset.cover = hero ? hero.id : "";
     if (!hero) return;
     const im = $("#coverImg"); im.src = hero.images[0]; im.alt = titleOf(hero);
-    $("#coverBtn").onclick = () => openViewer(ALL, ALL.indexOf(hero), 0, "封面", $("#coverBtn"));
-    $("#coverCaption").innerHTML = `<b>COVER · Nº ${pad3(NO.get(hero.id))}</b>${esc(titleOf(hero))}`;
-    const imgs = ALL.reduce((s, p) => s + p.images.length, 0);
-    $("#coverStats").textContent = `${ALL.length} Works · ${imgs} Images · ${HALLS.length} Halls`;
-    $("#issueDate").textContent = "Issue " + fmtDate(DATA.last_updated);
-    $("#issueVol").textContent = "Vol. I · Nº " + pad3(ALL.length);
-    const feats = HALLS.slice().sort((a, b) => b.posts.length - a.posts.length).slice(0, 3);
-    $("#coverFeatures").innerHTML = `<p class="cl-kicker">Features</p>` + feats.map((h) =>
-      `<a class="feat" href="#${h.id}" style="display:block;text-decoration:none"><em>HALL ${h.roman}</em><b>${esc(h.name)}</b><span>${esc(h.en)} · ${h.posts.length} works</span></a>`).join("");
+    $("#coverBtn").onclick = () => {
+      const list = sortPosts(ALL);
+      openViewer(list, list.findIndex((p) => p.id === hero.id), 0, "封面", $("#coverBtn"));
+    };
   }
 
   function renderProfile() {
@@ -209,7 +212,7 @@
           <p class="side-note l rv"><b>${fmt(imps)}</b>本殿累计曝光</p>
           <button type="button" class="colossus-frame" data-id="${top.id}" data-i="0" aria-label="${esc(titleOf(top))}">
             <img src="${esc(top.images[0])}" alt="${esc(titleOf(top))}" loading="lazy" decoding="async">
-            <span class="plaque"><em>镇殿之作 · Nº ${pad3(NO.get(top.id))}</em><b>${esc(titleOf(top))}</b><span>${fmtDate(top.created_at)} · 曝光 ${fmt(top.metrics.impressions)}</span></span>
+            <span class="plaque"><em>${FEATURED[archiveSort] || "镇殿之作"} · Nº ${pad3(NO.get(top.id))}</em><b>${esc(titleOf(top))}</b><span>${fmtDate(top.created_at)} · 曝光 ${fmt(top.metrics.impressions)}</span></span>
           </button>
           <p class="side-note r rv"><b>${fmt(likes)}</b>本殿累计点赞</p>
         </div>
@@ -236,6 +239,32 @@
     $("#grid").innerHTML = archiveView.map((p, i) => workHTML(p, i)).join("");
     $("#archiveNote").textContent = `共 ${ALL.length} 件作品，每件都附提示词。当前显示 ${archiveView.length} 件。`;
     observe($("#grid"));
+  }
+
+  function syncSortUI() {
+    const sel = $("#sort"); if (sel) sel.value = archiveSort;
+    const now = $("#sorterNow"); if (now) now.textContent = SORTS[archiveSort] || SORTS.hot;
+    document.querySelectorAll("#sorterMenu [data-sort]").forEach((b) => b.setAttribute("aria-selected", b.dataset.sort === archiveSort ? "true" : "false"));
+  }
+  function closeSorter() {
+    const menu = $("#sorterMenu"), btn = $("#sorterBtn");
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
+  function applySort(id) {
+    if (!SORTS[id]) id = "hot";
+    archiveSort = id;
+    try { localStorage.setItem(SORT_KEY, id); } catch {}
+    syncSortUI();
+    closeSorter();
+    HALLS.forEach((h) => { h.posts = sortPosts(h.posts); });
+    renderAtrium();
+    renderHalls();
+    renderArchive();
+    observe($("#halls"));
+    observe($("#arches"));
+    watchColossus();
   }
 
   // ---------- prompt typography (display only; copy uses the raw prompt)
@@ -379,12 +408,71 @@
     els.forEach((e) => io.observe(e));
   }
   const live = new Set();
+  let colio;
+  function watchColossus() {
+    live.clear();
+    if (reduced || !("IntersectionObserver" in window)) return;
+    if (colio) colio.disconnect();
+    colio = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting ? live.add(e.target) : live.delete(e.target)), { rootMargin: "20% 0px" });
+    document.querySelectorAll(".colossus-frame").forEach((f) => colio.observe(f));
+  }
+  function watchSorter() {
+    const cover = $("#cover"), el = $("#sorter");
+    if (!cover || !el) return;
+    const mq = matchMedia("(max-width: 760px)");
+    let pastCover = false, tucked = false, lastY = scrollY, armed = false, settleTimer = 0;
+    const apply = () => {
+      // desktop: visible whenever the cover is mostly gone
+      // mobile (<=760px): also tuck away while scrolling down, return on scroll up
+      const tuck = pastCover && mq.matches && tucked;
+      el.classList.toggle("show", pastCover);
+      el.classList.toggle("tuck", tuck);
+      const visible = pastCover && !tuck && !document.body.classList.contains("lock");
+      el.setAttribute("aria-hidden", visible ? "false" : "true");
+      if (!visible) closeSorter();
+    };
+    refreshSorter = apply;
+    const setRatio = (ratio) => {
+      const next = ratio < 0.28;
+      if (next && !pastCover) {
+        tucked = false; armed = false; lastY = scrollY;
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => { armed = true; lastY = scrollY; }, 160);
+      }
+      pastCover = next;
+      if (!pastCover) { tucked = false; armed = false; }
+      apply();
+    };
+    const onScroll = () => {
+      if (!pastCover || !mq.matches) {
+        tucked = false; armed = false; lastY = scrollY; apply(); return;
+      }
+      // wait until this scroll gesture settles before allowing tuck, so leaving the cover by scrolling down still shows the chip
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => { armed = true; lastY = scrollY; }, 160);
+      if (!armed) { lastY = scrollY; apply(); return; }
+      const y = scrollY, dy = y - lastY;
+      if (Math.abs(dy) > 8) { tucked = dy > 0; lastY = y; }
+      apply();
+    };
+    const onResize = () => { if (!mq.matches) { tucked = false; armed = false; } apply(); };
+    if ("IntersectionObserver" in window) {
+      const sio = new IntersectionObserver((es) => setRatio(es[0].intersectionRatio), { threshold: [0, 0.1, 0.2, 0.28, 0.4, 0.6, 0.8, 1] });
+      sio.observe(cover);
+    } else {
+      const fallback = () => setRatio(cover.getBoundingClientRect().bottom / Math.max(1, cover.offsetHeight));
+      addEventListener("resize", fallback);
+      fallback();
+    }
+    addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("resize", onResize);
+    if (mq.addEventListener) mq.addEventListener("change", onResize);
+    else if (mq.addListener) mq.addListener(onResize);
+  }
   function motion() {
     const bar = $("#bar"), cover = $("#cover"), fig = $("#coverFigure");
-    if (!reduced && "IntersectionObserver" in window) {
-      const pio = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting ? live.add(e.target) : live.delete(e.target)), { rootMargin: "20% 0px" });
-      document.querySelectorAll(".colossus-frame").forEach((f) => pio.observe(f));
-    }
+    watchColossus();
+    watchSorter();
     let ticking = false;
     const frame = () => {
       ticking = false;
@@ -420,7 +508,20 @@
       if (e.target.closest("#toc a")) { toc.hidden = true; $("#tocBtn").setAttribute("aria-expanded", "false"); }
     });
     $("#chips").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; archiveFilter = b.dataset.s; renderChips(); renderArchive(); });
-    $("#sort").addEventListener("change", (e) => { archiveSort = e.target.value; renderArchive(); });
+    $("#sort").addEventListener("change", (e) => applySort(e.target.value));
+    const sorterBtn = $("#sorterBtn"), sorterMenu = $("#sorterMenu");
+    sorterBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = sorterMenu.hidden;
+      sorterMenu.hidden = !open;
+      sorterBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    sorterMenu.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-sort]"); if (!b) return;
+      applySort(b.dataset.sort);
+    });
+    document.addEventListener("click", (e) => { if (!e.target.closest("#sorter")) closeSorter(); });
+    addEventListener("keydown", (e) => { if (e.key === "Escape") closeSorter(); });
     $("#lbTags").addEventListener("click", (e) => {
       const a = e.target.closest("a[data-s]"); if (!a) return; e.preventDefault();
       archiveFilter = a.dataset.s; renderChips(); renderArchive(); closeViewer();
@@ -449,10 +550,10 @@
     DATA = d;
     ALL = (d.posts || []).filter((p) => p && p.id && p.images && p.images.length).map((p) => ({ ...p, series: p.series || [], metrics: p.metrics || {} })).sort(newest);
     ALL.slice().reverse().forEach((p, i) => NO.set(p.id, i + 1));
-    buildHalls(); renderProfile(); renderCover(); renderAtrium(); renderHalls(); renderChips(); renderArchive(); bind();
+    buildHalls(); renderProfile(); renderCover(); renderAtrium(); renderHalls(); renderChips(); renderArchive(); syncSortUI(); bind();
     observe(document); motion();
     const m = location.hash.match(/p=(\d+)/);
-    if (m) { const i = ALL.findIndex((p) => p.id === m[1]); if (i >= 0) openViewer(ALL, i, 0, "档案馆 · 全部"); }
+    if (m) { const list = sortPosts(ALL); const i = list.findIndex((p) => p.id === m[1]); if (i >= 0) openViewer(list, i, 0, "档案馆 · 全部"); }
     else if (/^#hall-\d+$/.test(location.hash)) { const t = $(location.hash); if (t) t.scrollIntoView(); }
   }).catch((e) => { console.error(e); $("#empty").hidden = false; $("#empty").textContent = "作品数据加载失败，请稍后刷新。"; });
 })();
