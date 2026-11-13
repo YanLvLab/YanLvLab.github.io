@@ -119,6 +119,9 @@ def main():
     if a.profile:
         profile = build_profile(read_json_loose(a.profile))
     out = xp.save(existing, profile)
+    import categorize
+    _, cat_stats, _ = categorize.attach()
+    out["category_order"] = cat_stats["order"]
     removed = cleanup_images(existing)
     # audit list of rejected / uncertain candidates (not published: review/ is git-ignored)
     os.makedirs(os.path.dirname(REVIEW), exist_ok=True)
@@ -132,7 +135,8 @@ def main():
     import apply_config
     apply_config.apply()
     print(json.dumps({"added": len(added), "dropped": len(dropped), "metrics_refreshed": refreshed,
-                      "posts": len(out["posts"]), "images": sum(len(p["images"]) for p in out["posts"]),
+                      "posts": len(out["posts"]), "categories": cat_stats["counts"],
+                      "images": sum(len(p["images"]) for p in out["posts"]),
                       "uncertain": sum(1 for r in old.values() if r["verdict"] == "unsure"),
                       "images_deleted": removed, "last_updated": out["last_updated"]}, ensure_ascii=False))
 

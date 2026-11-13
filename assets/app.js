@@ -101,13 +101,11 @@
 
   let CFG = null, DATA = null, ALL = [], NO = new Map(), HALLS = [];
   const SORTS = { new: "最新发布", hot: "最高曝光", likes: "最多点赞", bookmarks: "最多收藏", old: "最早发布" };
-  const SORT_KEY = "hara_sort";
   const FEATURED = { new: "最新之作", hot: "镇殿之作", likes: "最多点赞", bookmarks: "最多收藏", old: "最早之作" };
-  const readSort = () => {
-    try { const v = localStorage.getItem(SORT_KEY); if (v && SORTS[v]) return v; } catch {}
-    return "hot";
-  };
-  let archiveFilter = "全部", archiveSort = readSort(), archiveView = [];
+  const NEVER_CAT = new Set(["其他", "偏殿", "韩书允", "林知夏", "姜宥娜"]);
+  // hall mode: archiveSort is unused; halls themselves stay ordered by impressions (hot)
+  let siteSort = null, flatFilter = null, flatView = [];
+  let archiveSort = "hot"; // comparator used inside halls (镇殿之作) and when a sort is chosen
   let ctx = { list: [], label: "" }, cur = -1, img = 0, lastFocus = null, navToken = 0;
   let locks = 0;
   let refreshSorter = () => {};
@@ -115,37 +113,45 @@
   const unlock = () => { locks = Math.max(0, locks - 1); if (!locks) document.body.classList.remove("lock"); refreshSorter(); };
 
   // ---------- build halls
+  const categoryOf = (p) => {
+    const c = p.category;
+    if (c && !NEVER_CAT.has(c)) return c;
+    const ser = (p.series || []).find((s) => !NEVER_CAT.has(s));
+    return ser || "城市日常";
+  };
   function buildHalls() {
-    const order = DATA.series_order || [];
+    const order = DATA.category_order || [];
     const groups = new Map();
-    const charOf = (p) => (p.series || []).find((s) => CHARACTERS.includes(s)) || CHARACTERS.find((c) => (p.text || "").includes(c));
-    const charCount = {};
-    ALL.forEach((p) => { const c = charOf(p); if (c) charCount[c] = (charCount[c] || 0) + 1; });
     ALL.forEach((p) => {
-      const ser = (p.series || []).filter((s) => !CHARACTERS.includes(s));
-      const c = charOf(p);
-      const prim = c && charCount[c] >= 3 ? c : ser[0] || "其他"; // a character hall needs at least 3 works
+      const prim = categoryOf(p);
+      p.category = prim;
       if (!groups.has(prim)) groups.set(prim, []);
       groups.get(prim).push(p);
     });
-    const side = [];
+    // Keep any hall listed in category_order (overrides may hold a hall under 3 works).
+    // Defensive: leftover tiny groups *not* in the official order still fold into 城市日常.
     const halls = [];
+    const spill = [];
     for (const [name, posts] of groups) {
-      if (posts.length < 3 && name !== "其他") side.push(...posts);
-      else halls.push({ name, posts });
+      if (order.includes(name) || posts.length >= 3) halls.push({ name, posts });
+      else spill.push(...posts);
     }
-    if (side.length) {
-      const misc = halls.find((h) => h.name === "其他");
-      if (misc) { misc.posts.push(...side); misc.name = "偏殿"; misc.merged = true; }
-      else halls.push({ name: "偏殿", posts: side, merged: true });
+    if (spill.length) {
+      const daily = halls.find((h) => h.name === "城市日常");
+      if (daily) daily.posts.push(...spill);
+      else if (spill.length >= 3) halls.push({ name: "城市日常", posts: spill });
+      else if (halls[0]) halls[0].posts.push(...spill);
     }
-    const rank = (n) => CHARACTERS.includes(n) ? -10 + CHARACTERS.indexOf(n) : n === "偏殿" ? 999 : (order.indexOf(n) < 0 ? 500 : order.indexOf(n));
+    const rank = (n) => { const i = order.indexOf(n); return i < 0 ? 500 : i; };
     halls.sort((a, b) => rank(a.name) - rank(b.name));
+    const keep = archiveSort;
+    archiveSort = "hot"; // halls always open with 镇殿之作 = 最高曝光
     halls.forEach((h, i) => {
       h.posts = sortPosts(h.posts);
       h.id = "hall-" + (i + 1); h.roman = ROMAN[i + 1] || String(i + 1); h.en = EN[h.name] || h.name;
-      h.label = CHARACTERS.includes(h.name) ? "人物殿 · Character" : h.merged ? "偏殿 · Lesser Halls" : "系列殿 · Series";
+      h.label = "系列殿 · Series";
     });
+    archiveSort = keep;
     HALLS = halls;
   }
 
@@ -169,8 +175,9 @@
     if (!hero) return;
     const im = $("#coverImg"); im.src = hero.images[0]; im.alt = titleOf(hero);
     $("#coverBtn").onclick = () => {
-      const list = sortPosts(ALL);
-      openViewer(list, list.findIndex((p) => p.id === hero.id), 0, "封面", $("#coverBtn"));
+      const hall = HALLS.find((h) => h.posts.some((q) => q.id === hero.id));
+      const list = hall ? hall.posts : ALL;
+      openViewer(list, list.findIndex((q) => q.id === hero.id), 0, hall ? `Hall ${hall.roman} · ${hall.name}` : "封面", $("#coverBtn"));
     };
   }
 
@@ -191,8 +198,7 @@
     $("#arches").innerHTML = HALLS.map((h) => `<a class="arch rv" href="#${h.id}">
       <span class="arch-door"><span class="arch-r">${h.roman}</span><img src="${esc(thumbOf(h.posts[0]))}" alt="" loading="lazy" decoding="async"></span>
       <span class="arch-name">${esc(h.name)}</span><span class="arch-en">${esc(h.en)}</span><span class="arch-c">${h.posts.length} WORKS</span></a>`).join("");
-    $("#toc").innerHTML = HALLS.map((h) => `<a href="#${h.id}"><span class="r">${h.roman}</span><span class="n">${esc(h.name)}<i>${esc(h.en)}</i></span><span class="c">${h.posts.length}</span></a>`).join("")
-      + `<a href="#archive"><span class="r">∞</span><span class="n">档案馆<i>The Archive</i></span><span class="c">${ALL.length}</span></a>`;
+    renderRail();
   }
 
   function renderHalls() {
@@ -226,25 +232,68 @@
     const k = { hot: "impressions", likes: "likes", bookmarks: "bookmarks" }[archiveSort];
     return list.slice().sort((a, b) => archiveSort === "old" ? -newest(a, b) : k ? (b.metrics[k] || 0) - (a.metrics[k] || 0) || newest(a, b) : newest(a, b));
   }
-  function renderChips() {
-    const counts = {};
-    ALL.forEach((p) => p.series.forEach((s) => counts[s] = (counts[s] || 0) + 1));
-    const order = ["全部", ...(DATA.series_order || []).filter((s) => counts[s]), ...Object.keys(counts).filter((s) => !(DATA.series_order || []).includes(s))];
-    $("#chips").innerHTML = order.map((s) =>
-      `<button class="chip" role="tab" aria-selected="${s === archiveFilter}" data-s="${esc(s)}">${esc(s)}<small>${s === "全部" ? ALL.length : counts[s]}</small></button>`).join("");
+  function isFlat() { return !!siteSort; }
+  function renderRail() {
+    const nav = $("#railNav"); if (!nav) return;
+    const allOn = isFlat() && !flatFilter;
+    nav.innerHTML = (isFlat() ? `<a href="#flat" class="rail-all${allOn ? " on" : ""}" data-rail="*">全部<span>${ALL.length}</span></a>` : "")
+      + HALLS.map((h) => `<a href="#${h.id}" data-rail="${esc(h.name)}" class="${isFlat() && flatFilter === h.name ? "on" : ""}"><em>${h.roman}</em><b>${esc(h.name)}</b><i>${esc(h.en)}</i><span>${h.posts.length}</span></a>`).join("");
   }
-  function renderArchive() {
-    archiveView = sortPosts(ALL.filter((p) => archiveFilter === "全部" || p.series.includes(archiveFilter)));
-    $("#empty").hidden = archiveView.length > 0;
-    $("#grid").innerHTML = archiveView.map((p, i) => workHTML(p, i)).join("");
-    $("#archiveNote").textContent = `共 ${ALL.length} 件作品，每件都附提示词。当前显示 ${archiveView.length} 件。`;
-    observe($("#grid"));
+  function setRailCurrent(id) {
+    document.querySelectorAll("#railNav a[href^='#hall']").forEach((a) => a.classList.toggle("current", a.getAttribute("href") === "#" + id));
   }
-
+  function renderFlat() {
+    const list = sortPosts(ALL.filter((p) => !flatFilter || p.category === flatFilter));
+    flatView = list;
+    const el = $("#flat"), empty = $("#empty"), grid = $("#grid"), title = $("#flatTitle");
+    if (!el) return;
+    const sortLabel = SORTS[siteSort] || "";
+    const filterLabel = flatFilter || "全部作品";
+    if (title) title.textContent = flatFilter ? `${flatFilter} · ${sortLabel}` : `全部作品 · ${sortLabel}`;
+    empty.hidden = list.length > 0;
+    grid.innerHTML = list.map((p, i) => workHTML(p, i)).join("");
+    observe(grid);
+  }
+  function enterFlat(id) {
+    if (!SORTS[id]) return;
+    siteSort = id;
+    archiveSort = id;
+    document.body.classList.add("flat-mode");
+    const atrium = $("#atrium"), halls = $("#halls"), flat = $("#flat"), cancel = $("#sortCancel");
+    if (atrium) atrium.hidden = true;
+    if (halls) halls.hidden = true;
+    if (flat) flat.hidden = false;
+    if (cancel) cancel.hidden = false;
+    renderFlat();
+    renderRail();
+    syncSortUI();
+    closeSorter();
+    const target = $("#flat");
+    if (target) target.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  }
+  function leaveFlat() {
+    siteSort = null;
+    flatFilter = null;
+    archiveSort = "hot";
+    document.body.classList.remove("flat-mode");
+    const atrium = $("#atrium"), halls = $("#halls"), flat = $("#flat"), cancel = $("#sortCancel");
+    if (atrium) atrium.hidden = false;
+    if (halls) halls.hidden = false;
+    if (flat) flat.hidden = true;
+    if (cancel) cancel.hidden = true;
+    syncSortUI();
+    closeSorter();
+    renderRail();
+    // halls still in 最高曝光 order from build; just re-observe
+    observe($("#halls"));
+    observe($("#arches"));
+    const t = $("#atrium");
+    if (t) t.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  }
   function syncSortUI() {
-    const sel = $("#sort"); if (sel) sel.value = archiveSort;
-    const now = $("#sorterNow"); if (now) now.textContent = SORTS[archiveSort] || SORTS.hot;
-    document.querySelectorAll("#sorterMenu [data-sort]").forEach((b) => b.setAttribute("aria-selected", b.dataset.sort === archiveSort ? "true" : "false"));
+    const now = $("#sorterNow");
+    if (now) now.textContent = siteSort ? SORTS[siteSort] : "殿堂";
+    document.querySelectorAll("#sorterMenu [data-sort]").forEach((b) => b.setAttribute("aria-selected", b.dataset.sort === siteSort ? "true" : "false"));
   }
   function closeSorter() {
     const menu = $("#sorterMenu"), btn = $("#sorterBtn");
@@ -252,20 +301,7 @@
     menu.hidden = true;
     if (btn) btn.setAttribute("aria-expanded", "false");
   }
-  function applySort(id) {
-    if (!SORTS[id]) id = "hot";
-    archiveSort = id;
-    try { localStorage.setItem(SORT_KEY, id); } catch {}
-    syncSortUI();
-    closeSorter();
-    HALLS.forEach((h) => { h.posts = sortPosts(h.posts); });
-    renderAtrium();
-    renderHalls();
-    renderArchive();
-    observe($("#halls"));
-    observe($("#arches"));
-    watchColossus();
-  }
+  function applySort(id) { enterFlat(id); }
 
   // ---------- prompt typography (display only; copy uses the raw prompt)
   function promptHTML(t) {
@@ -304,7 +340,7 @@
     $("#lbCaption").textContent = titleOf(p);
     const fullCap = captionText(p); const vc = $("#vCaption");
     vc.textContent = fullCap; vc.hidden = !fullCap || fullCap.replace(/\s+/g, "") === titleOf(p).replace(/\s+/g, "");
-    $("#lbTags").innerHTML = p.series.map((s) => `<a href="#archive" data-s="${esc(s)}">${esc(s)}</a>`).join("");
+    $("#lbTags").innerHTML = p.series.map((s) => `<span>${esc(s)}</span>`).join("");
     const M = p.metrics;
     $("#lbMetrics").innerHTML = [["曝光", M.impressions], ["点赞", M.likes], ["收藏", M.bookmarks]].map(([l, v]) => `<div><b>${fmt(v)}</b>${l}</div>`).join("");
     $("#lbPrompt").innerHTML = promptHTML(p.prompt || ""); $("#lbPrompt").classList.remove("sel");
@@ -384,16 +420,15 @@
   // ---------- gate (site.config.json adult_notice)
   const GATE_DEFAULT = { adult_notice: true, adult_notice_text: "本站包含 AI 生成的成人时尚写真（均为虚构成年模特，无裸露）。请确认你已年满 18 岁后继续浏览。", adult_notice_confirm: "我已年满 18 岁，进入", adult_notice_leave: "离开" };
   function gate(cfg) {
-    cfg = cfg || GATE_DEFAULT; // config missing or unreadable: fail closed and still ask
-    if (!cfg.adult_notice) return;
-    try { if (localStorage.getItem("adult_ok") === "1") return; } catch {}
+    // Show unless adult_notice is explicitly false. Missing, unreadable, or {} still fail closed.
+    if (cfg && cfg.adult_notice === false) return;
+    cfg = Object.assign({}, GATE_DEFAULT, cfg || {});
     $("#gateText").textContent = cfg.adult_notice_text || "";
     $("#gateYes").textContent = cfg.adult_notice_confirm || "进入";
     $("#gateNo").textContent = cfg.adult_notice_leave || "离开";
     const g = $("#gate"); g.hidden = false; lock();
     setTimeout(() => $("#gateYes").focus(), 50);
     $("#gateYes").onclick = () => {
-      try { localStorage.setItem("adult_ok", "1"); } catch {}
       if (reduced) { g.hidden = true; unlock(); return; }
       g.classList.add("opening"); setTimeout(() => { g.hidden = true; unlock(); }, 1500);
     };
@@ -430,6 +465,7 @@
       const visible = pastCover && !tuck && !document.body.classList.contains("lock");
       el.setAttribute("aria-hidden", visible ? "false" : "true");
       if (!visible) closeSorter();
+      document.body.classList.toggle("past-cover", pastCover);
     };
     refreshSorter = apply;
     const setRatio = (ratio) => {
@@ -474,10 +510,26 @@
     watchColossus();
     watchSorter();
     let ticking = false;
+    const updateRailCurrent = () => {
+      if (isFlat()) return;
+      const spine = innerHeight * 0.38;
+      let best = null, score = -1;
+      document.querySelectorAll(".hall").forEach((h) => {
+        const r = h.getBoundingClientRect();
+        if (r.bottom <= 80 || r.top >= innerHeight) return;
+        const vis = Math.min(r.bottom, innerHeight) - Math.max(r.top, 80);
+        const onSpine = r.top <= spine && r.bottom > spine;
+        const s = (onSpine ? 1e6 : 0) + vis;
+        if (s > score) { score = s; best = h.id; }
+      });
+      if (best) setRailCurrent(best);
+    };
     const frame = () => {
       ticking = false;
       const y = scrollY, vh = innerHeight;
       bar.classList.toggle("on", y > cover.offsetHeight * .72);
+      document.body.classList.toggle("past-cover", y > cover.offsetHeight * .72);
+      updateRailCurrent();
       if (reduced) return;
       if (y < vh * 1.2) fig.style.setProperty("--cy", (y * .28).toFixed(1) + "px");
       live.forEach((f) => { const r = f.getBoundingClientRect(); const p = Math.min(1, Math.max(0, (vh - r.top) / (vh + r.height))); f.style.setProperty("--p", p.toFixed(4)); });
@@ -495,20 +547,49 @@
     ap.onclick = () => archGo(-1); an.onclick = () => archGo(1);
     ar.addEventListener("scroll", archState, { passive: true }); addEventListener("resize", archState); archState();
     const listFor = (el) => {
+      if (isFlat() || el.closest("#flat")) {
+        const label = "全部 · " + (SORTS[siteSort] || "") + (flatFilter ? " · " + flatFilter : "");
+        return [flatView, label];
+      }
       const hall = el.closest(".hall");
       if (hall) { const h = HALLS[+hall.dataset.h]; return [h.posts, `Hall ${h.roman} · ${h.name}`]; }
-      return [archiveView, "档案馆 · " + archiveFilter];
+      return [ALL, "作品"];
     };
+    const rail = $("#rail"), mask = $("#railMask"), railOpen = $("#railOpen"), tocBtn = $("#tocBtn");
+    const railOpenState = () => document.body.classList.contains("is-rail");
+    const setRailOpen = (open) => {
+      document.body.classList.toggle("is-rail", open);
+      if (railOpen) railOpen.setAttribute("aria-expanded", open ? "true" : "false");
+      if (tocBtn) tocBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      if (mask) mask.hidden = !open;
+    };
+    const toggleRail = () => setRailOpen(!railOpenState());
+    if (railOpen) railOpen.addEventListener("click", (e) => { e.stopPropagation(); toggleRail(); });
+    if (tocBtn) tocBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleRail(); });
+    if (mask) mask.addEventListener("click", () => setRailOpen(false));
+    if (rail) rail.addEventListener("click", (e) => {
+      const a = e.target.closest("a[data-rail]");
+      if (!a) {
+        if (e.target.closest(".rail-home")) setRailOpen(false);
+        return;
+      }
+      if (isFlat()) {
+        e.preventDefault();
+        const v = a.dataset.rail;
+        flatFilter = v === "*" ? null : v;
+        renderFlat();
+        renderRail();
+        setRailOpen(false);
+        const target = $("#flat");
+        if (target) target.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+      } else {
+        setRailOpen(false);
+      }
+    });
     document.addEventListener("click", (e) => {
       const w = e.target.closest(".work, .colossus-frame");
       if (w) { const [list, label] = listFor(w); openViewer(list, +w.dataset.i, 0, label, w); return; }
-      const toc = $("#toc");
-      if (e.target.closest("#tocBtn")) { const open = toc.hidden; toc.hidden = !open; $("#tocBtn").setAttribute("aria-expanded", open); return; }
-      if (!toc.hidden && !e.target.closest("#toc")) { toc.hidden = true; $("#tocBtn").setAttribute("aria-expanded", "false"); }
-      if (e.target.closest("#toc a")) { toc.hidden = true; $("#tocBtn").setAttribute("aria-expanded", "false"); }
     });
-    $("#chips").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; archiveFilter = b.dataset.s; renderChips(); renderArchive(); });
-    $("#sort").addEventListener("change", (e) => applySort(e.target.value));
     const sorterBtn = $("#sorterBtn"), sorterMenu = $("#sorterMenu");
     sorterBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -520,19 +601,18 @@
       const b = e.target.closest("[data-sort]"); if (!b) return;
       applySort(b.dataset.sort);
     });
+    const cancel = $("#sortCancel");
+    if (cancel) cancel.addEventListener("click", (e) => { e.stopPropagation(); leaveFlat(); });
     document.addEventListener("click", (e) => { if (!e.target.closest("#sorter")) closeSorter(); });
-    addEventListener("keydown", (e) => { if (e.key === "Escape") closeSorter(); });
-    $("#lbTags").addEventListener("click", (e) => {
-      const a = e.target.closest("a[data-s]"); if (!a) return; e.preventDefault();
-      archiveFilter = a.dataset.s; renderChips(); renderArchive(); closeViewer();
-      $("#archive").scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
+    addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { closeSorter(); setRailOpen(false); }
     });
     $("#lbClose").onclick = closeViewer; $("#lbPrev").onclick = () => step(-1); $("#lbNext").onclick = () => step(1);
     $("#lbCopy").onclick = copyPrompt;
     $("#lbDots").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { const k = +b.dataset.k; const d = k > img ? 1 : -1; img = k; showImg(d); } });
     $("#lbStage").addEventListener("click", (e) => { if (e.target === e.currentTarget || e.target.id === "vFigure") closeViewer(); });
     addEventListener("keydown", (e) => {
-      if (lb.hidden) { if (e.key === "Escape" && !$("#toc").hidden) { $("#toc").hidden = true; $("#tocBtn").setAttribute("aria-expanded", "false"); } return; }
+      if (lb.hidden) return;
       if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowRight") { e.preventDefault(); step(1); } else if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
     });
     let sx = null, sy = null;
@@ -550,10 +630,14 @@
     DATA = d;
     ALL = (d.posts || []).filter((p) => p && p.id && p.images && p.images.length).map((p) => ({ ...p, series: p.series || [], metrics: p.metrics || {} })).sort(newest);
     ALL.slice().reverse().forEach((p, i) => NO.set(p.id, i + 1));
-    buildHalls(); renderProfile(); renderCover(); renderAtrium(); renderHalls(); renderChips(); renderArchive(); syncSortUI(); bind();
+    buildHalls(); renderProfile(); renderCover(); renderAtrium(); renderHalls(); syncSortUI(); bind();
     observe(document); motion();
     const m = location.hash.match(/p=(\d+)/);
-    if (m) { const list = sortPosts(ALL); const i = list.findIndex((p) => p.id === m[1]); if (i >= 0) openViewer(list, i, 0, "档案馆 · 全部"); }
-    else if (/^#hall-\d+$/.test(location.hash)) { const t = $(location.hash); if (t) t.scrollIntoView(); }
+    if (m) {
+      const hall = HALLS.find((h) => h.posts.some((q) => q.id === m[1]));
+      const list = hall ? hall.posts : ALL;
+      const i = list.findIndex((p) => p.id === m[1]);
+      if (i >= 0) openViewer(list, i, 0, hall ? `Hall ${hall.roman} · ${hall.name}` : "作品");
+    } else if (/^#hall-\d+$/.test(location.hash)) { const t = $(location.hash); if (t) t.scrollIntoView(); }
   }).catch((e) => { console.error(e); $("#empty").hidden = false; $("#empty").textContent = "作品数据加载失败，请稍后刷新。"; });
 })();

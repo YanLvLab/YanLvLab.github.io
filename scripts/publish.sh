@@ -49,6 +49,14 @@ resolve_token() {
   echo "no valid GitHub token (env GITHUB_TOKEN or $f)" >&2; exit 1
 }
 
+# refresh primary categories (overrides + classifier) without bumping last_updated
+if ! cat_out="$(python3 scripts/categorize.py 2>&1)"; then
+  echo "CATEGORIZE FAILED: ${cat_out}" >&2
+  exit 1
+fi
+printf '%s
+' "$cat_out"
+
 git add -A
 if git diff --cached --quiet; then
   local_head="$(git rev-parse HEAD 2>/dev/null || true)"

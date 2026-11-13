@@ -1,0 +1,23 @@
+{
+  "_comment": "Map a post id to a category string, or {\"category\": \"新中式\", \"note\": \"why\"}. Keys starting with _ are ignored. Manual overrides are never auto-merged, even if the hall has fewer than 3 works.",
+  "2113458225328845242": {
+    "category": "POV",
+    "note": "皇帝钦定：男友视角归POV"
+  },
+  "2117932360427778406": {
+    "category": "POV",
+    "note": "皇帝钦定：教练按摩归POV"
+  },
+  "2117481447275561158": {
+    "category": "丝袜",
+    "note": "皇帝钦定：薄荷绿买家秀归丝袜"
+  },
+  "2120313057918193760": {
+    "category": "运动",
+    "note": "皇帝钦定：台球助教归运动"
+  },
+  "2114917840570741234": {
+    "category": "运动",
+    "note": "皇帝钦定：台球归运动"
+  }
+}
