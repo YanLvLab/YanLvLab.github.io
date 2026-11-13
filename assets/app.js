@@ -1,4 +1,4 @@
-/* HARA · 巨人殿 — vanilla JS, reads data/posts.json (already filtered by update.py / hidden.json). */
+/* HARA · 作品集 — vanilla JS, reads data/posts.json (already filtered by update.py / hidden.json). */
 (() => {
   "use strict";
   const $ = (s, r = document) => r.querySelector(s);
