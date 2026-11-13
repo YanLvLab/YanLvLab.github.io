@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>YLL·Hara — AI 时尚影像作品集</title>
 <meta name="description" content="YLL·Hara（@GenRyoma）的 AI 生图作品集：时装写真、夜拍、新中式、泳装与城市日常，每件作品附提示词。每日同步自 X。">
-<meta name="theme-color" content="#0b0b0d">
+<meta name="theme-color" content="#07070a">
 <!-- robots:start --><!-- robots:end -->
 <link rel="canonical" href="https://yanlvlab.github.io/">
 <meta property="og:type" content="website">
@@ -24,75 +24,147 @@
 <meta name="twitter:description" content="AI 时尚影像 · AI Fashion Portrait。每件作品附提示词，每日同步自 X @GenRyoma。">
 <meta name="twitter:image" content="https://yanlvlab.github.io/og.jpg">
 <link rel="icon" href="images/avatar.jpg">
+<link rel="preload" href="assets/fonts/bodoni-moda-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/bodoni-moda-latin-400-italic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-<header class="hero" id="hero">
-  <div class="hero-bg" id="heroBg"></div>
-  <div class="hero-inner">
-    <img class="avatar" id="avatar" src="images/avatar.jpg" alt="YLL·Hara 头像" width="112" height="112">
-    <div class="hero-text">
-      <p class="eyebrow">AI Fashion Portrait · Portfolio</p>
-      <h1 id="name">YLL·Hara</h1>
-      <a class="handle" id="handle" href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a>
-      <p class="bio" id="bio"></p>
-      <div class="stats" id="stats"></div>
-      <a class="btn-x" href="https://x.com/GenRyoma" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-        在 X 上关注</a>
-    </div>
-  </div>
+<a class="skip" href="#archive">跳到全部作品</a>
+
+<header class="bar" id="bar" aria-label="站点导航">
+  <a class="bar-mark" href="#top" aria-label="回到封面">HARA<span>巨人殿</span></a>
+  <nav class="bar-nav">
+    <button class="bar-btn" id="tocBtn" type="button" aria-expanded="false" aria-controls="toc">目录 <i>Index</i></button>
+    <a class="bar-btn" href="#archive">档案 <i>Archive</i></a>
+    <a class="bar-btn bar-x" href="https://x.com/GenRyoma" target="_blank" rel="noopener" aria-label="在 X 上关注 @GenRyoma"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+  </nav>
+  <div class="toc" id="toc" hidden></div>
 </header>
 
-<nav class="toolbar" id="toolbar" aria-label="筛选与排序">
-  <div class="chips" id="chips" role="tablist"></div>
-  <label class="sort">
-    <span>排序</span>
-    <select id="sort">
-      <option value="new">最新发布</option>
-      <option value="hot">最高曝光</option>
-      <option value="likes">最多点赞</option>
-      <option value="bookmarks">最多收藏</option>
-      <option value="old">最早发布</option>
-    </select>
-  </label>
-</nav>
+<main id="top">
+  <!-- I. COVER -->
+  <section class="cover" id="cover" aria-label="封面">
+    <div class="fog fog-a" aria-hidden="true"></div>
+    <div class="pillar pillar-l" aria-hidden="true"></div>
+    <div class="pillar pillar-r" aria-hidden="true"></div>
+    <p class="cover-issue"><span id="issueVol">VOL. I</span><span id="issueDate">—</span><span>异世界时尚 · Otherworld Couture</span></p>
+    <h1 class="masthead" aria-label="YLL·Hara 作品集"><span class="mh-small">YLL·</span>HARA</h1>
+    <div class="cover-figure" id="coverFigure">
+      <button class="cover-img" id="coverBtn" type="button" aria-label="打开封面作品">
+        <img id="coverImg" alt="" fetchpriority="high" decoding="async">
+      </button>
+    </div>
+    <div class="cover-lines cover-lines-l">
+      <p class="cl-kicker">本期特辑</p>
+      <p class="cl-big">巨人殿</p>
+      <p class="cl-it">The Hall of Giants</p>
+      <p class="cl-sub" id="coverStats">—</p>
+    </div>
+    <div class="cover-lines cover-lines-r" id="coverFeatures"></div>
+    <p class="cover-caption" id="coverCaption"></p>
+    <a class="cover-enter" href="#atrium"><span>步入殿堂</span><i>Enter the Hall</i><b aria-hidden="true"></b></a>
+  </section>
 
-<main>
-  <div class="grid" id="grid" aria-live="polite"></div>
-  <p class="empty" id="empty" hidden>这个系列暂时没有作品。</p>
-  <noscript><p class="empty">请启用 JavaScript 浏览作品集。</p></noscript>
+  <!-- II. EDITOR'S LETTER -->
+  <section class="letter" aria-label="卷首语">
+    <p class="letter-kicker">Editor’s Letter · 卷首语</p>
+    <p class="letter-text">你走进来的时候，她们已经站在这里很久了。<br>这是一座按巨人尺度建造的殿堂：每一件作品都比你高，每一行提示词都是她们的出生证明。</p>
+    <div class="letter-meta">
+      <img class="avatar" id="avatar" src="images/avatar.jpg" alt="YLL·Hara 头像" width="64" height="64" loading="lazy">
+      <div><b id="name">YLL·Hara</b><a id="handle" href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a><p class="bio" id="bio"></p></div>
+      <div class="stats" id="stats"></div>
+    </div>
+  </section>
+
+  <!-- III. ATRIUM: hall index -->
+  <section class="atrium" id="atrium" aria-labelledby="atriumTitle">
+    <div class="floor" aria-hidden="true"></div>
+    <header class="sec-head">
+      <p class="sec-kicker">The Atrium</p>
+      <h2 id="atriumTitle">前殿 · 诸殿目录</h2>
+      <p class="sec-note">每一座拱门通向一个系列。抬头，往里走。</p>
+    </header>
+    <div class="arches-wrap">
+      <button class="arch-arrow prev" id="archPrev" type="button" aria-label="向左浏览诸殿"><i></i></button>
+      <div class="arches" id="arches"></div>
+      <button class="arch-arrow next" id="archNext" type="button" aria-label="向右浏览诸殿"><i></i></button>
+    </div>
+  </section>
+
+  <!-- IV. HALLS -->
+  <div id="halls"></div>
+
+  <!-- V. ARCHIVE -->
+  <section class="archive" id="archive" aria-labelledby="archiveTitle">
+    <header class="sec-head">
+      <p class="sec-kicker">The Archive</p>
+      <h2 id="archiveTitle">档案馆 · 全部作品</h2>
+      <p class="sec-note" id="archiveNote"></p>
+    </header>
+    <nav class="toolbar" aria-label="筛选与排序">
+      <div class="chips" id="chips" role="tablist"></div>
+      <label class="sort"><span>排序</span>
+        <select id="sort">
+          <option value="new">最新发布</option>
+          <option value="hot">最高曝光</option>
+          <option value="likes">最多点赞</option>
+          <option value="bookmarks">最多收藏</option>
+          <option value="old">最早发布</option>
+        </select>
+      </label>
+    </nav>
+    <div class="grid" id="grid" aria-live="polite"></div>
+    <p class="empty" id="empty" hidden>这个系列暂时没有作品。</p>
+    <noscript><p class="empty">请启用 JavaScript 浏览作品集。</p></noscript>
+  </section>
 </main>
 
-<footer class="footer">
-  <p>最后更新时间：<time id="updated">—</time>（上海时间）</p>
+<footer class="colophon">
+  <p class="colo-mark">HARA</p>
+  <p>最后更新时间：<time id="updated">—</time>（上海时间）· 每日同步自 X</p>
   <p class="muted">作品均来自 <a href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a> 的公开帖子，图像为 AI 生成，人物均为虚构的成年模特。</p>
+  <p class="muted small">字体：Bodoni Moda、Jost（<a href="assets/fonts/OFL.txt">SIL Open Font License</a>）</p>
 </footer>
 
-<div class="lightbox" id="lb" role="dialog" aria-modal="true" aria-label="作品详情" hidden>
-  <button class="lb-close" id="lbClose" aria-label="关闭">×</button>
-  <button class="lb-nav lb-prev" id="lbPrev" aria-label="上一张">‹</button>
-  <button class="lb-nav lb-next" id="lbNext" aria-label="下一张">›</button>
-  <div class="lb-stage" id="lbStage">
-    <img id="lbImg" alt="">
-    <div class="lb-dots" id="lbDots"></div>
+<!-- VIEWER -->
+<div class="viewer" id="lb" role="dialog" aria-modal="true" aria-label="作品详情" hidden>
+  <div class="v-ambient" id="vAmbient" aria-hidden="true"></div>
+  <div class="v-top">
+    <p class="v-count"><b id="vNo">Nº —</b><span id="vPos"></span><span id="vHall"></span></p>
+    <button class="v-close" id="lbClose" type="button" aria-label="关闭（Esc）"><span></span><span></span></button>
   </div>
-  <aside class="lb-panel">
-    <time class="lb-date" id="lbDate"></time>
-    <h2 class="lb-caption" id="lbCaption"></h2>
-    <div class="lb-tags" id="lbTags"></div>
-    <div class="lb-metrics" id="lbMetrics"></div>
-    <section class="lb-prompt" id="lbPromptWrap">
-      <div class="lb-prompt-head"><span>提示词</span><button id="lbCopy" type="button">复制</button></div>
-      <pre id="lbPrompt"></pre>
+  <div class="v-stage" id="lbStage">
+    <button class="v-nav v-prev" id="lbPrev" type="button" aria-label="上一张（←）"><i></i></button>
+    <figure class="v-figure" id="vFigure"><img id="lbImg" alt=""></figure>
+    <button class="v-nav v-next" id="lbNext" type="button" aria-label="下一张（→）"><i></i></button>
+    <div class="v-dots" id="lbDots"></div>
+  </div>
+  <aside class="v-panel" id="vPanel">
+    <time class="v-date" id="lbDate"></time>
+    <h2 class="v-title" id="lbCaption"></h2>
+    <p class="v-caption" id="vCaption" hidden></p>
+    <div class="v-tags" id="lbTags"></div>
+    <div class="v-metrics" id="lbMetrics"></div>
+    <section class="v-prompt" id="lbPromptWrap" aria-label="提示词">
+      <div class="v-prompt-head">
+        <p><span>提示词</span><i>Prompt</i></p>
+        <button id="lbCopy" class="v-copy" type="button"><span class="v-copy-label">复制提示词</span></button>
+      </div>
+      <div class="v-prompt-body" id="lbPrompt"></div>
     </section>
-    <a class="btn-x wide" id="lbLink" target="_blank" rel="noopener">在 X 上查看 ↗</a>
+    <a class="v-xlink" id="lbLink" target="_blank" rel="noopener">在 X 上查看原帖 <span aria-hidden="true">↗</span></a>
+    <p class="v-hint">← → 翻页 · Esc 关闭 · 手机左右滑动</p>
   </aside>
 </div>
-<div class="toast" id="toast" role="status"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- ADULT NOTICE GATE: the great door -->
 <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateText" hidden>
+  <div class="door door-l" aria-hidden="true"></div>
+  <div class="door door-r" aria-hidden="true"></div>
   <div class="gate-box">
-    <p class="eyebrow">YLL·Hara</p>
+    <p class="gate-mark">HARA</p>
+    <p class="gate-kicker">巨人殿之门 · The Gate</p>
     <p id="gateText"></p>
     <div class="gate-actions"><button id="gateYes" type="button"></button><a id="gateNo" href="https://x.com/GenRyoma"></a></div>
   </div>

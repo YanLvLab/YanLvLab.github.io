@@ -15,3 +15,5 @@ scripts/__pycache__/
 *token*
 *secret*
 .git-credentials
+# local backup of the previous frontend (never publish)
+_old_frontend/
