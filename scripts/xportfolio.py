@@ -287,6 +287,79 @@ def download(post):
     return post
 
 
+
+def load_image_overrides():
+    """data/image_overrides.json: {work_id: {from_post_id, src?, w?, h?}} — keep prompt, swap photos."""
+    path = os.path.join(ROOT, "data", "image_overrides.json")
+    try:
+        d = json.load(open(path, encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    return {k: v for k, v in d.items() if not str(k).startswith("_") and isinstance(v, dict)}
+
+
+def _photos_from_responses(responses):
+    media = {}
+    for d in responses or []:
+        for m in (d.get("includes") or {}).get("media", []):
+            media[m["media_key"]] = m
+    out = {}
+    for d in responses or []:
+        for t in d.get("data", []) or []:
+            keys = (t.get("attachments") or {}).get("media_keys", [])
+            photos = [media[k] for k in keys if k in media and media[k].get("type") == "photo"]
+            if photos:
+                out[str(t["id"])] = [{"src": m["url"], "w": m.get("width"), "h": m.get("height")} for m in photos]
+    return out
+
+
+def _clear_downloaded(post):
+    for rel in list(post.get("images") or []) + list(post.get("thumbs") or []):
+        fp = os.path.join(ROOT, rel)
+        if os.path.isfile(fp):
+            os.remove(fp)
+    pid = post["id"]
+    for n in range(1, 8):
+        for ext in ("jpg", "jpeg", "png", "webp"):
+            p = os.path.join(IMG_DIR, f"{pid}_{n}.{ext}")
+            if os.path.isfile(p):
+                os.remove(p)
+        t = os.path.join(THUMB_DIR, f"{pid}_{n}.webp")
+        if os.path.isfile(t):
+            os.remove(t)
+    post["images"], post["thumbs"] = [], []
+
+
+def apply_image_overrides(posts, responses=None, download_now=False):
+    """Replace a work's photos with another of the author's posts (or a fixed src). Returns count applied."""
+    ov = load_image_overrides()
+    if not ov:
+        return 0
+    photos_by_id = _photos_from_responses(responses)
+    applied = 0
+    for pid, spec in ov.items():
+        if pid not in posts:
+            print(f"image override: work {pid} not in set yet", file=sys.stderr)
+            continue
+        src_id = str(spec.get("from_post_id") or "")
+        media = photos_by_id.get(src_id)
+        if not media and spec.get("src"):
+            media = [{"src": spec["src"], "w": spec.get("w"), "h": spec.get("h")}]
+        if not media:
+            print(f"image override FAILED: no media for {pid} <- {src_id}", file=sys.stderr)
+            continue
+        already = posts[pid].get("media") == media and posts[pid].get("images")
+        posts[pid]["media"] = media
+        if download_now and not already:
+            _clear_downloaded(posts[pid])
+            download(posts[pid])
+            print("image override applied", pid, "<-", src_id or spec.get("src"))
+        elif not download_now:
+            print("image override media swapped", pid, "<-", src_id or spec.get("src"))
+        applied += 1
+    return applied
+
+
 def load_overrides():
     """data/hidden.json: {"ids": [...never show...], "include_ids": [...force-include despite no detected prompt...]}"""
     try:

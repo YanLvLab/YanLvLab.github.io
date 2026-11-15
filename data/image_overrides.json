@@ -1,0 +1,10 @@
+{
+  "_note": "作品 id 的提示词、文案、原帖链接保持不变，图片改用 from_post_id 的图（找不到时用 src）。由 scripts/update.py 在每日同步时自动替换。",
+  "2121647597672669387": {
+    "from_post_id": "2121985063353237859",
+    "src": "https://pbs.twimg.com/media/HXLOH6CaUAAhqJE.jpg",
+    "w": 941,
+    "h": 1672,
+    "reason": "2026-11-15 旨：紫色蕾丝吊带背部摄影，用 23:13 修手图，提示词仍用凌晨 Violet glow 原帖。"
+  }
+}

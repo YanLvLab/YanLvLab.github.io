@@ -92,7 +92,9 @@ def main():
             print(t.strftime("%Y-%m-%dT%H:%M:%SZ"))
         return
     hidden, force = xp.load_overrides()
-    incoming, rejected = xp.normalise([read_json_loose(f) for f in a.input], hidden, force)
+    raws = [read_json_loose(f) for f in a.input]
+    incoming, rejected = xp.normalise(raws, hidden, force)
+    xp.apply_image_overrides(incoming, raws, download_now=False)
 
     added, refreshed, dropped = [], 0, []
     for pid, p in incoming.items():
@@ -103,6 +105,7 @@ def main():
         else:
             existing[pid] = xp.download(p); added.append(pid)
             print("added", pid, p["created_at"][:16], p["series"], len(p["images"]), "img", "prompt:", p["prompt_source"])
+    xp.apply_image_overrides(existing, raws, download_now=True)
     for pid in list(existing):
         if pid in rejected:  # previously shown, now fails the rule / hidden
             dropped.append(pid); existing.pop(pid)
