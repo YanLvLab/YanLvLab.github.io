@@ -270,6 +270,15 @@ body.lock .rail{opacity:0;visibility:hidden;pointer-events:none}
 /* ---------- viewer ---------- */
 .viewer{position:fixed;inset:0;z-index:100;display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,400px);grid-template-rows:auto minmax(0,1fr);
   background:#090807;overflow:hidden}
+.viewer.is-silent{grid-template-columns:minmax(0,1fr)}
+.viewer.is-silent .v-panel{display:none}
+.model-hall{padding:28px 0 40px}
+.model-hall .hall-head{position:relative;z-index:1;overflow:visible;margin:0 0 18px}
+.model-hall .hall-title{font-size:clamp(28px,7vw,44px);line-height:1.2;text-shadow:none}
+.model-hall .hall-en{margin:4px 0 0;font-size:16px}
+.model-hall .hall-count{margin:6px 0 0}
+.model-gallery{position:relative;z-index:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;align-items:start;width:min(1440px,100%);margin:0 auto;padding:0 var(--pad) 8px}
+.model-gallery .empty{padding:12px 0 28px}
 .viewer[hidden]{display:none}
 .viewer.opening{animation:vIn .28s var(--ease) both}
 @keyframes vIn{from{opacity:0}to{opacity:1}}
@@ -383,12 +392,13 @@ body.lock .rail{opacity:0;visibility:hidden;pointer-events:none}
   .g-row>.work{max-width:none}
   .grid{grid-template-columns:1fr 1fr}
   .bar-btn i{display:none}
-  .viewer{display:block;overflow:auto}
-  .v-top{position:sticky;top:0;background:rgba(9,8,7,.94)}
-  .v-stage{height:max(230px,calc(100svh - 148px));grid-template-columns:48px minmax(0,1fr) 48px}
+  .viewer{display:flex;flex-direction:column;z-index:200;background:#090807}
+  .v-top{position:relative;flex:0 0 auto;background:#090807}
+  .v-stage{flex:1 1 auto;height:auto;min-height:0;grid-template-columns:48px minmax(0,1fr) 48px}
+  .v-ambient{display:none}
+  body.lock .bar{visibility:hidden}
   .v-panel{overflow:visible;border-left:0;border-top:1px solid rgba(183,160,120,.18);padding:18px var(--pad) calc(28px + env(safe-area-inset-bottom))}
   .v-hint{display:none}
-  .v-ambient{position:fixed}
 }
 @media (max-width:380px){
   .bar-mark{font-size:16px;letter-spacing:.08em}

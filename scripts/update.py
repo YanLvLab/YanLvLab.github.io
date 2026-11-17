@@ -11,9 +11,11 @@ X data can only be fetched through the X MCP tools (no API keys live in this rep
   python3 scripts/update.py --reclassify                      # re-run prompt rule / series / overrides only
   python3 scripts/update.py --print-since-time                # UTC start_time for the daily search (newest - 48h)
 
-RULE: only image posts that carry a generation prompt (in the post text, or in the author's own reply
-thread under it) are kept. Posts without a prompt are dropped and their image files deleted. Uncertain
-cases go to review/excluded.json (verdict "unsure"); force-include by id via data/hidden.json "include_ids".
+RULE: the theme feed keeps image posts that carry the author's own generation prompt (post text or the
+author's own replies). Author images that name 韩书允 / 林知夏 / 姜宥娜 without a prompt are archived for
+the picture-only model galleries. Already archived ids, local image files, prompts, and model labels are
+never deleted because a later fetch omits them or the source post is gone. hidden.json suppresses display
+only. Uncertain cases go to review/excluded.json.
 
 Input files: the JSON body returned by get_users_posts or search_posts_all (keys data/includes/meta),
 requested with expansions=attachments.media_keys,referenced_posts and
@@ -58,15 +60,105 @@ def build_profile(raw):
 REVIEW = os.path.join(xp.ROOT, "review", "excluded.json")
 
 
-def cleanup_images(posts):
-    keep = {os.path.basename(x) for p in posts.values() for x in p["images"] + p["thumbs"]} | {"avatar.jpg", "banner.jpg"}
+MANIFEST = os.path.join(xp.ROOT, "data", "archive_manifest.json")
+SNAPSHOT = os.path.join(xp.ROOT, "data", "snapshots", "posts-ef9ccd3.json")
+
+
+def snapshot_posts():
+    """One copy of the pre-migration catalogue. Later syncs do not overwrite it."""
+    if os.path.exists(xp.DATA) and not os.path.exists(SNAPSHOT):
+        os.makedirs(os.path.dirname(SNAPSHOT), exist_ok=True)
+        import shutil
+        shutil.copyfile(xp.DATA, SNAPSHOT)
+
+
+def remember_files(posts, manifest_path=None):
+    path = manifest_path or MANIFEST
+    kept = set()
+    if os.path.exists(path):
+        kept.update(json.load(open(path, encoding="utf-8")))
+    for p in posts.values():
+        for rel in (p.get("images") or []) + (p.get("thumbs") or []):
+            kept.add(rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    json.dump(sorted(kept), open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    return kept
+
+
+def cleanup_images(posts, img_dir=None, thumb_dir=None, manifest_path=None):
+    """Delete only files that were never archived. Manifest entries stay on disk."""
+    img_dir = img_dir or xp.IMG_DIR
+    thumb_dir = thumb_dir or xp.THUMB_DIR
+    keep_rel = remember_files(posts, manifest_path)
+    keep = {os.path.basename(x) for x in keep_rel} | {"avatar.jpg", "banner.jpg"}
     removed = 0
-    for d in (xp.IMG_DIR, xp.THUMB_DIR):
+    for d in (img_dir, thumb_dir):
+        if not os.path.isdir(d):
+            continue
         for f in os.listdir(d):
             fp = os.path.join(d, f)
             if os.path.isfile(fp) and f not in keep:
                 os.remove(fp); removed += 1
     return removed
+
+
+def _zh_models(raw):
+    out = []
+    for m in raw or []:
+        if isinstance(m, dict):
+            m = m.get("zh")
+        if m in xp.CHARACTERS and m not in out:
+            out.append(m)
+    return out
+
+
+def ingest_prepared(path):
+    """Merge a prepared catalogue slice. Does not copy the slice file into the site."""
+    blob = json.load(open(path, encoding="utf-8"))
+    snapshot_posts()
+    existing, profile = load_existing()
+    fresh = {}
+    for src in blob.get("posts") or []:
+        p = dict(src)
+        p["models"] = xp.model_names(p)
+        p["in_feed"] = True
+        p["series"] = xp.classify(p.get("caption") or "", p.get("prompt") or "")
+        p["images"], p["thumbs"] = [], []
+        fresh[p["id"]] = xp.download(p)
+    for src in blob.get("model_only_posts") or []:
+        p = dict(src)
+        p["id"] = str(p["id"])
+        named = xp.model_names(p) or _zh_models(src.get("models"))
+        if str(p["id"]) in xp.AMBIGUOUS_MODEL_IDS or set(named) >= xp.CHARACTERS:
+            continue
+        p["models"] = named
+        p["in_feed"] = False
+        p["prompt"] = ""
+        p["prompt_source"] = None
+        p["series"] = list(named)
+        p["images"], p["thumbs"] = [], []
+        fresh[p["id"]] = xp.download(p)
+    existing, added, refreshed = xp.merge_archive(existing, fresh)
+    prof = blob.get("profile") or {}
+    if prof:
+        profile = dict(profile)
+        if prof.get("bio"):
+            profile["bio"] = prof["bio"]
+        if prof.get("followers") is not None:
+            profile["followers"] = prof["followers"]
+        if prof.get("name"):
+            profile["name"] = prof["name"]
+        if prof.get("username"):
+            profile["username"] = prof["username"]
+            profile["url"] = prof.get("url") or profile.get("url")
+    out = xp.save(existing, profile)
+    import categorize
+    _, cat_stats, _ = categorize.attach()
+    remember_files({p["id"]: p for p in json.load(open(xp.DATA, encoding="utf-8"))["posts"]})
+    feed = [p for p in out["posts"] if p.get("in_feed") is not False and not p.get("suppressed")]
+    print(json.dumps({"added": added, "refreshed": refreshed, "archived": len(out["posts"]),
+                      "feed": len(feed), "categories": cat_stats["counts"]}, ensure_ascii=False))
+    return out
 
 
 def main():
@@ -79,7 +171,8 @@ def main():
     ap.add_argument("--print-since-time", action="store_true", help="UTC start_time to fetch from (newest post - 48h)")
     a = ap.parse_args()
 
-    existing, profile = ({}, {}) if a.rebuild else load_existing()
+    snapshot_posts()
+    existing, profile = load_existing()
     if a.print_since_id or a.print_since_time:
         if not existing:
             print(""); return
@@ -93,32 +186,35 @@ def main():
         return
     hidden, force = xp.load_overrides()
     raws = [read_json_loose(f) for f in a.input]
-    incoming, rejected = xp.normalise(raws, hidden, force)
+    incoming, rejected, model_only = xp.normalise(raws, hidden, force)
     xp.apply_image_overrides(incoming, raws, download_now=False)
-
-    added, refreshed, dropped = [], 0, []
-    for pid, p in incoming.items():
-        if pid in existing:  # keep files, refresh live numbers + thread/prompt
-            for k in ("metrics", "thread", "caption", "prompt", "prompt_source", "series"):
-                existing[pid][k] = p[k]
-            refreshed += 1
-        else:
-            existing[pid] = xp.download(p); added.append(pid)
-            print("added", pid, p["created_at"][:16], p["series"], len(p["images"]), "img", "prompt:", p["prompt_source"])
+    fresh = dict(model_only)
+    fresh.update(incoming)  # a prompted post wins over a picture-only copy of the same id
+    for pid, p in list(fresh.items()):
+        if (pid not in existing or not existing[pid].get("images")) and not p.get("images"):
+            fresh[pid] = xp.download(p)
+            print("added", pid, p["created_at"][:16], p.get("series"), "feed:", p.get("in_feed"))
+    existing, added_ids, refreshed = xp.merge_archive(existing, fresh)
+    dropped = []  # archive ids are not pruned; kept in the summary for older logs
+    for pid in hidden:
+        if pid in existing:
+            existing[pid]["suppressed"] = True  # display off; files and the record stay
     xp.apply_image_overrides(existing, raws, download_now=True)
-    for pid in list(existing):
-        if pid in rejected:  # previously shown, now fails the rule / hidden
-            dropped.append(pid); existing.pop(pid)
     if a.reclassify:
         for pid, p in list(existing.items()):
-            cap, prompt, v, src = xp.evaluate(p["text"], p.get("thread", []))
-            if pid in hidden or (v != "yes" and pid not in force):
-                dropped.append(pid); rejected[pid] = {"id": pid, "verdict": "hidden" if pid in hidden else v,
-                                                      "created_at": p["created_at"], "text": p["text"][:200], "url": p["url"]}
-                existing.pop(pid); continue
-            if v == "yes":
-                p["caption"], p["prompt"], p["prompt_source"] = cap, prompt, src
-            p["series"] = xp.classify(p["caption"], p["prompt"])
+            cap, prompt, v, src = xp.evaluate(p.get("text") or "", p.get("thread", []))
+            if v == "yes" or pid in force:
+                if v == "yes":
+                    p["caption"], p["prompt"], p["prompt_source"] = cap, prompt, src
+                elif pid in force and not p.get("prompt"):
+                    p["prompt"] = "\n\n".join([p.get("text") or ""] + list(p.get("thread") or []))
+                    p["prompt_source"] = p.get("prompt_source") or "manual"
+                if p.get("prompt"):
+                    p["in_feed"] = True
+                    p["series"] = xp.classify(p.get("caption") or "", p.get("prompt") or "")
+            p["models"] = xp.model_names(p)
+            if pid in hidden:
+                p["suppressed"] = True
     if a.profile:
         profile = build_profile(read_json_loose(a.profile))
     out = xp.save(existing, profile)
@@ -137,7 +233,7 @@ def main():
     # og.jpg is a fixed text card (scripts/make_og.py) and is never rebuilt from post images.
     import apply_config
     apply_config.apply()
-    print(json.dumps({"added": len(added), "dropped": len(dropped), "metrics_refreshed": refreshed,
+    print(json.dumps({"added": len(added_ids), "dropped": len(dropped), "metrics_refreshed": refreshed,
                       "posts": len(out["posts"]), "categories": cat_stats["counts"],
                       "images": sum(len(p["images"]) for p in out["posts"]),
                       "uncertain": sum(1 for r in old.values() if r["verdict"] == "unsure"),
