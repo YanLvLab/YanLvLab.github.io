@@ -391,5 +391,126 @@
       "created_at": "2026-11-17T22:58:07+08:00",
       "url": "https://x.com/GenRyoma/status/2122705852859904483"
     }
+  ],
+  "model_only_posts": [
+    {
+      "id": "2113584396582412739",
+      "created_at": "2026-10-23T18:52:43+08:00",
+      "text": "Wanna drink coffee with Seoyun？☕️",
+      "thread": [],
+      "caption": "Wanna drink coffee with Seoyun？☕️",
+      "prompt": "",
+      "prompt_source": null,
+      "url": "https://x.com/GenRyoma/status/2113584396582412739",
+      "quote": false,
+      "media": [
+        {
+          "src": "https://pbs.twimg.com/media/HVT1iv_agAAe5D5.jpg",
+          "w": 1122,
+          "h": 1402
+        }
+      ],
+      "images": [
+        "images/2113584396582412739_1.jpg"
+      ],
+      "thumbs": [
+        "images/thumb/2113584396582412739_1.webp"
+      ],
+      "metrics": {
+        "impressions": 1791,
+        "likes": 14,
+        "bookmarks": 3,
+        "reposts": 1,
+        "replies": 0
+      },
+      "models": [
+        {
+          "zh": "韩书允",
+          "en": "Han Seoyun"
+        }
+      ],
+      "identity_text": [
+        "Seoyun"
+      ]
+    },
+    {
+      "id": "2108388958526964003",
+      "created_at": "2026-10-09T10:47:54+08:00",
+      "text": "韩书允向大家问好",
+      "thread": [],
+      "caption": "韩书允向大家问好",
+      "prompt": "",
+      "prompt_source": null,
+      "url": "https://x.com/GenRyoma/status/2108388958526964003",
+      "quote": false,
+      "media": [
+        {
+          "src": "https://pbs.twimg.com/media/HUKAdVWbcAAa1yu.jpg",
+          "w": 1122,
+          "h": 1402
+        },
+        {
+          "src": "https://pbs.twimg.com/media/HUKAdVWaEAA3YOF.jpg",
+          "w": 1122,
+          "h": 1402
+        },
+        {
+          "src": "https://pbs.twimg.com/media/HUKAdVfbEAAmw--.jpg",
+          "w": 1122,
+          "h": 1402
+        }
+      ],
+      "images": [
+        "images/2108388958526964003_1.jpg",
+        "images/2108388958526964003_2.jpg",
+        "images/2108388958526964003_3.jpg"
+      ],
+      "thumbs": [
+        "images/thumb/2108388958526964003_1.webp",
+        "images/thumb/2108388958526964003_2.webp",
+        "images/thumb/2108388958526964003_3.webp"
+      ],
+      "metrics": {
+        "impressions": 416,
+        "likes": 3,
+        "bookmarks": 1,
+        "reposts": 0,
+        "replies": 5
+      },
+      "models": [
+        {
+          "zh": "韩书允",
+          "en": "Han Seoyun"
+        }
+      ],
+      "identity_text": [
+        "韩书允"
+      ]
+    }
+  ],
+  "do_not_assign": [
+    {
+      "id": "2117870734303531012",
+      "created_at": "2026-11-04T14:45:05+08:00",
+      "text": "又搓了两位虚拟模特\n\n韩书允 Han Seoyun  & 姜宥娜 Kang Yuna & 林知夏 Lin Zhixia",
+      "url": "https://x.com/GenRyoma/status/2117870734303531012",
+      "quote": false,
+      "media": [
+        {
+          "src": "https://pbs.twimg.com/media/HWQwJuZbQAEtbKO.jpg",
+          "w": 1122,
+          "h": 1402
+        }
+      ],
+      "identity_text": [
+        "韩书允",
+        "Han Seoyun",
+        "姜宥娜",
+        "Kang Yuna",
+        "林知夏",
+        "Lin Zhixia"
+      ],
+      "reason": "single image names all three models; do not split or assign"
+    }
   ]
 }
