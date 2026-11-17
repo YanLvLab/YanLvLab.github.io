@@ -38,14 +38,17 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 .skip:focus{transform:none}
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
-/* light needle — decorative ring around the native cursor, never a replacement */
+/* fine-pointer crosshair. Native cursor stays; this node never takes clicks. */
 .needle{
-  position:fixed;left:0;top:0;z-index:120;width:16px;height:16px;margin:-8px 0 0 -8px;
-  border:1px solid rgba(217,203,176,.72);border-radius:50%;
-  box-shadow:0 0 0 1px rgba(12,11,10,.45), 0 0 10px rgba(168,196,198,.28);
-  pointer-events:none;opacity:0;transition:opacity .2s linear;
+  position:fixed;left:0;top:0;z-index:120;width:15px;height:15px;margin:-7px 0 0 -7px;
+  pointer-events:none;opacity:0;border-radius:0;
+  background:
+    linear-gradient(#e4d5b4,#e4d5b4) 0 7px / 5px 1px no-repeat,
+    linear-gradient(#e4d5b4,#e4d5b4) 10px 7px / 5px 1px no-repeat,
+    linear-gradient(#e4d5b4,#e4d5b4) 7px 0 / 1px 5px no-repeat,
+    linear-gradient(#e4d5b4,#e4d5b4) 7px 10px / 1px 5px no-repeat;
 }
-.needle.on{opacity:1}
+.needle.on{opacity:.9}
 @media (hover:none),(pointer:coarse){.needle{display:none!important}}
 
 /* ---------- bar ---------- */
@@ -131,7 +134,8 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
   padding:calc(var(--band) + var(--recess));background:#100e0c}
 .relic:has(.plaque){margin-bottom:16px}
 .relic-cover,.relic-hero,.relic-view{--band:16px;--recess:11px}
-.relic-cover{display:inline-block;width:auto;max-width:100%;margin-bottom:0}
+.relic-cover,.v-figure.relic-view{display:inline-block;width:max-content;max-width:100%;max-height:100%;margin-bottom:0}
+.v-figure.relic-view .well{width:auto}
 .relic-arch{width:100%}
 .edge{position:absolute;z-index:1;pointer-events:none}
 .edge.n,.edge.s{left:0;right:0;height:var(--band)}
@@ -327,10 +331,13 @@ body.lock .rail{opacity:0;visibility:hidden;pointer-events:none}
 .v-prompt-head p{margin:0;display:flex;align-items:baseline;gap:8px;min-width:0}
 .v-prompt-head span{font:500 12px/1 var(--sans);letter-spacing:.08em;color:var(--gold-2)}
 .v-prompt-head i{font:italic 400 16px/1 var(--serif);color:var(--bone)}
-.v-copy{min-height:44px;padding:0 14px;border-radius:999px;background:var(--bone);color:var(--ink);font:500 13px/1 var(--sans);letter-spacing:.02em;white-space:nowrap;transition:background .2s linear}
-.v-copy:hover{background:var(--gold-2)}
-.v-copy.ok{background:#cfe3d2;color:#102413}
-.v-copy.err{background:#e7c2b8;color:#3a140e}
+.v-copy{min-height:44px;padding:0 14px;border-radius:999px;border:1px solid rgba(228,213,180,.8);
+  background:#14110e;color:#f3e6c4;font:500 13px/1 var(--sans);letter-spacing:.02em;white-space:nowrap;
+  transition:background .2s linear,color .2s linear,border-color .2s linear}
+.v-copy:hover{background:#2a2318;color:#fff6e4;border-color:#e4d5b4}
+.v-copy:focus-visible{outline:2px solid #e4d5b4;outline-offset:3px}
+.v-copy.ok{background:#cbb892;color:#1a140c;border-color:#cbb892}
+.v-copy.err{background:#5c2824;color:#ffe8e2;border-color:#e7b2a8}
 .v-prompt-body{font:400 14px/1.75 var(--sans);color:#ddd6cb;letter-spacing:.01em;overflow-wrap:anywhere}
 .v-prompt-body p{margin:0 0 .8em}
 .v-prompt-body strong{font-weight:600;color:var(--bone)}
@@ -377,7 +384,7 @@ body.lock .rail{opacity:0;visibility:hidden;pointer-events:none}
   .rail{top:0;width:min(86vw,320px);padding:72px 16px 28px;background:rgba(12,11,10,.98);
     transform:translateX(-105%);opacity:1;visibility:visible;pointer-events:none;transition:transform .24s var(--ease);border-right:1px solid rgba(183,160,120,.2)}
   body.past-cover .rail{opacity:1;visibility:visible;pointer-events:none}
-  body.is-rail .rail{transform:none;pointer-events:auto}
+  body.is-rail .rail{transform:none;pointer-events:auto;z-index:80;padding-top:calc(var(--dock, 96px) + 12px)}
   body.lock .rail{pointer-events:none}
   .sorter{flex:1 1 100%}
   .rail-mask{display:block;position:fixed;inset:0;z-index:53;background:rgba(0,0,0,.5);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s linear,visibility .2s linear}
