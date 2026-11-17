@@ -6,6 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMG_DIR = os.path.join(ROOT, "images")
 THUMB_DIR = os.path.join(IMG_DIR, "thumb")
 DATA = os.path.join(ROOT, "data", "posts.json")
+MODEL_MEDIA = os.path.join(ROOT, "data", "model_media.json")
 HIDDEN = os.path.join(ROOT, "data", "hidden.json")
 SHANGHAI = timezone(timedelta(hours=8))
 USERNAME = "GenRyoma"
@@ -193,6 +194,50 @@ def model_names(post):
     return out
 
 
+def apply_model_media(posts, path=None):
+    """Label archived images from data/model_media.json. One confirmed picture does not label its siblings.
+
+    Labels already stored on an image stay if this file does not mention that image. Pending rows stay unassigned.
+    Returns the number of confirmed labels applied."""
+    path = path or MODEL_MEDIA
+    if not os.path.exists(path):
+        return 0
+    data = json.load(open(path, encoding="utf-8"))
+    confirmed, pending = {}, set()
+    for row in data.get("confirmed") or []:
+        if row.get("model_zh") in CHARACTERS:
+            confirmed[(str(row["post_id"]), int(row["index"]))] = row["model_zh"]
+    for row in data.get("pending") or []:
+        pending.add((str(row["post_id"]), int(row["index"])))
+    applied = 0
+    for p in posts.values():
+        images = p.get("images") or []
+        if not images:
+            continue
+        prev = list(p.get("image_models") or [])
+        keys = [(str(p.get("id")), i) for i in range(1, len(images) + 1)]
+        if not any(k in confirmed or k in pending for k in keys) and not prev:
+            continue
+        labels = []
+        for n, key in enumerate(keys):
+            if key in confirmed:
+                labels.append(confirmed[key]); applied += 1
+            elif key in pending:
+                labels.append(None)
+            elif n < len(prev) and prev[n] in CHARACTERS:
+                labels.append(prev[n])
+            else:
+                labels.append(None)
+        p["image_models"] = labels
+        if any(k in confirmed or k in pending for k in keys):
+            seen = []
+            for m in labels:
+                if m and m not in seen:
+                    seen.append(m)
+            p["models"] = seen
+    return applied
+
+
 def _author_reply(t):
     """True only for @GenRyoma's own reply. A present foreign author_id is never treated as ours."""
     aid = t.get("author_id")
@@ -353,7 +398,9 @@ def merge_archive(existing, incoming):
     for old in existing.values():
         if old.get("prompt") and old.get("in_feed") is None:
             old["in_feed"] = True
-        old["models"] = model_names(old)
+        if not old.get("image_models"):
+            old["models"] = model_names(old)
+    apply_model_media(existing)
     return existing, added, refreshed
 
 

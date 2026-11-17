@@ -73,9 +73,36 @@ def test_missing_source_does_not_drop():
     }}
     merged, added, refreshed = xp.merge_archive(existing, {})
     assert "2122359287666065800" in merged
-    assert merged["2122359287666065800"]["prompt"] == "keep me"
-    assert merged["2122359287666065800"]["models"] == ["姜宥娜"]
+    kept = merged["2122359287666065800"]
+    assert kept["prompt"] == "keep me"
+    assert kept["image_models"] == ["林知夏"]
+    assert kept["models"] == ["林知夏"]
     assert added == []
+
+
+def test_one_confirmed_image_does_not_label_siblings():
+    posts = {"9": {
+        "id": "9",
+        "images": ["images/9_1.jpg", "images/9_2.jpg"],
+        "models": ["韩书允"],
+        "image_models": ["韩书允", "韩书允"],
+    }, "8": {
+        "id": "8",
+        "images": ["images/8_1.jpg"],
+        "models": ["姜宥娜"],
+        "image_models": ["姜宥娜"],
+    }}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "map.json")
+        json.dump({
+            "confirmed": [{"post_id": "9", "index": 1, "src": "images/9_1.jpg", "model_zh": "林知夏"}],
+            "pending": [{"post_id": "9", "index": 2, "src": "images/9_2.jpg", "status": "uncertain", "reason": "待审"}],
+        }, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+        xp.apply_model_media(posts, path)
+    assert posts["9"]["image_models"] == ["林知夏", None]
+    assert posts["9"]["models"] == ["林知夏"]
+    assert posts["8"]["image_models"] == ["姜宥娜"]
+    assert posts["8"]["models"] == ["姜宥娜"]
 
 
 def test_cleanup_keeps_manifest(tmp=None):
@@ -98,5 +125,6 @@ if __name__ == "__main__":
     test_unnamed_photo_is_not_assigned()
     test_all_three_names_are_not_assigned()
     test_missing_source_does_not_drop()
+    test_one_confirmed_image_does_not_label_siblings()
     test_cleanup_keeps_manifest()
     print("archive tests ok")

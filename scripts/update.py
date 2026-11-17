@@ -215,6 +215,7 @@ def main():
             p["models"] = xp.model_names(p)
             if pid in hidden:
                 p["suppressed"] = True
+        xp.apply_model_media(existing)
     if a.profile:
         profile = build_profile(read_json_loose(a.profile))
     out = xp.save(existing, profile)
