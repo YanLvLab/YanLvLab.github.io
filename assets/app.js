@@ -369,6 +369,7 @@
     if (!menu || menu.hidden) return;
     menu.hidden = true;
     if (btn) btn.setAttribute("aria-expanded", "false");
+    requestAnimationFrame(syncDock);
   }
   function applySort(id) { enterFlat(id); }
 
@@ -517,63 +518,34 @@
     if (!io) io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -6% 0px", threshold: .08 });
     els.forEach((e) => io.observe(e));
   }
+  function syncDock() {
+    const bar = $("#bar");
+    if (!bar) return;
+    const next = Math.ceil(bar.getBoundingClientRect().height) + "px";
+    const cur = document.documentElement.style.getPropertyValue("--dock");
+    if (cur !== next) {
+      document.documentElement.style.setProperty("--dock", next);
+      requestAnimationFrame(fitCover);
+    }
+  }
   function watchSorter() {
-    const cover = $("#cover"), el = $("#sorter");
+    const cover = $("#cover"), el = $("#sorter"), scroller = document.querySelector("main");
     if (!cover || !el) return;
-    const mq = matchMedia("(max-width: 760px)");
-    let pastCover = false, tucked = false, lastY = scrollY, armed = false, settleTimer = 0;
     const apply = () => {
-      // desktop: visible whenever the cover is mostly gone
-      // mobile (<=760px): also tuck away while scrolling down, return on scroll up
-      const tuck = pastCover && mq.matches && tucked;
-      el.classList.toggle("show", pastCover);
-      el.classList.toggle("tuck", tuck);
-      const visible = pastCover && !tuck && !document.body.classList.contains("lock");
-      el.setAttribute("aria-hidden", visible ? "false" : "true");
-      if (!visible) closeSorter();
-      document.body.classList.toggle("past-cover", pastCover);
+      const past = !!(scroller && scroller.scrollTop > cover.offsetHeight * 0.62);
+      document.body.classList.toggle("past-cover", past);
+      const locked = document.body.classList.contains("lock");
+      el.setAttribute("aria-hidden", locked ? "true" : "false");
+      if (locked) closeSorter();
     };
     refreshSorter = apply;
-    const setRatio = (ratio) => {
-      const next = ratio < 0.28;
-      if (next && !pastCover) {
-        tucked = false; armed = false; lastY = scrollY;
-        clearTimeout(settleTimer);
-        settleTimer = setTimeout(() => { armed = true; lastY = scrollY; }, 160);
-      }
-      pastCover = next;
-      if (!pastCover) { tucked = false; armed = false; }
-      apply();
-    };
-    const onScroll = () => {
-      if (!pastCover || !mq.matches) {
-        tucked = false; armed = false; lastY = scrollY; apply(); return;
-      }
-      // wait until this scroll gesture settles before allowing tuck, so leaving the cover by scrolling down still shows the chip
-      clearTimeout(settleTimer);
-      settleTimer = setTimeout(() => { armed = true; lastY = scrollY; }, 160);
-      if (!armed) { lastY = scrollY; apply(); return; }
-      const y = scrollY, dy = y - lastY;
-      if (Math.abs(dy) > 8) { tucked = dy > 0; lastY = y; }
-      apply();
-    };
-    const onResize = () => { if (!mq.matches) { tucked = false; armed = false; } apply(); };
-    if ("IntersectionObserver" in window) {
-      const sio = new IntersectionObserver((es) => setRatio(es[0].intersectionRatio), { threshold: [0, 0.1, 0.2, 0.28, 0.4, 0.6, 0.8, 1] });
-      sio.observe(cover);
-    } else {
-      const fallback = () => setRatio(cover.getBoundingClientRect().bottom / Math.max(1, cover.offsetHeight));
-      addEventListener("resize", fallback);
-      fallback();
-    }
-    addEventListener("scroll", onScroll, { passive: true });
-    addEventListener("resize", onResize);
-    if (mq.addEventListener) mq.addEventListener("change", onResize);
-    else if (mq.addListener) mq.addListener(onResize);
+    if (scroller) scroller.addEventListener("scroll", apply, { passive: true });
+    apply();
   }
   function motion() {
-    const bar = $("#bar"), cover = $("#cover");
+    const scroller = document.querySelector("main");
     watchSorter();
+    syncDock();
     let ticking = false;
     const updateRailCurrent = () => {
       if (isFlat()) return;
@@ -591,13 +563,12 @@
     };
     const frame = () => {
       ticking = false;
-      const y = scrollY;
-      bar.classList.toggle("on", y > cover.offsetHeight * .72);
-      document.body.classList.toggle("past-cover", y > cover.offsetHeight * .72);
+      syncDock();
       updateRailCurrent();
     };
-    addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(frame); } }, { passive: true });
-    addEventListener("resize", () => { fitCover(); fitLb(); frame(); });
+    const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(frame); } };
+    (scroller || window).addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("resize", () => { syncDock(); fitCover(); fitLb(); frame(); });
     frame();
   }
 
@@ -681,6 +652,7 @@
       const open = sorterMenu.hidden;
       sorterMenu.hidden = !open;
       sorterBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      requestAnimationFrame(syncDock);
     });
     sorterMenu.addEventListener("click", (e) => {
       const b = e.target.closest("[data-sort]"); if (!b) return;

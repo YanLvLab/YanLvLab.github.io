@@ -31,12 +31,26 @@
 <body>
 <a class="skip" href="#atrium">跳到诸殿</a>
 
-<header class="bar" id="bar" aria-label="站点导航">
+<header class="bar on" id="bar" aria-label="站点导航">
   <a class="bar-mark" href="#top" aria-label="回到封面">HARA<span>作品集</span></a>
+  <div class="sorter" id="sorter">
+    <button class="sorter-cancel" id="sortCancel" type="button" hidden>取消排序 · 回到大殿</button>
+    <button class="sorter-toggle" id="sorterBtn" type="button" aria-expanded="false" aria-haspopup="listbox" aria-controls="sorterMenu">
+      <span class="sorter-kicker">Sort · 排序</span>
+      <span class="sorter-now" id="sorterNow">殿堂</span>
+    </button>
+  </div>
   <nav class="bar-nav">
     <button class="bar-btn" id="tocBtn" type="button" aria-expanded="false" aria-controls="rail">目录 <i>Index</i></button>
     <a class="bar-btn bar-x" href="https://x.com/GenRyoma" target="_blank" rel="noopener" aria-label="在 X 上关注 @GenRyoma"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
   </nav>
+  <ul class="sorter-menu" id="sorterMenu" role="listbox" aria-label="排序方式" hidden>
+    <li><button type="button" role="option" data-sort="new" aria-selected="false">最新发布</button></li>
+    <li><button type="button" role="option" data-sort="hot" aria-selected="false">最高曝光</button></li>
+    <li><button type="button" role="option" data-sort="likes" aria-selected="false">最多点赞</button></li>
+    <li><button type="button" role="option" data-sort="bookmarks" aria-selected="false">最多收藏</button></li>
+    <li><button type="button" role="option" data-sort="old" aria-selected="false">最早发布</button></li>
+  </ul>
 </header>
 
 <main id="top">
@@ -109,6 +123,13 @@
     <p class="empty" id="empty" hidden>这个分类暂时没有作品。</p>
     <noscript><p class="empty">请启用 JavaScript 浏览作品集。</p></noscript>
   </section>
+
+  <footer class="colophon">
+    <p class="colo-mark">HARA</p>
+    <p>最后更新时间：<time id="updated">—</time>（上海时间）· 每日同步自 X</p>
+    <p class="muted">作品均来自 <a href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a> 的公开帖子，图像为 AI 生成，人物均为虚构的成年模特。</p>
+    <p class="muted small">字体：Bodoni Moda、Jost（<a href="assets/fonts/OFL.txt">SIL Open Font License</a>）</p>
+  </footer>
 </main>
 
 <aside class="rail" id="rail" aria-label="诸殿导航">
@@ -117,28 +138,6 @@
 </aside>
 <button class="rail-open" id="railOpen" type="button" aria-expanded="false" aria-controls="rail" aria-label="打开诸殿目录">诸殿</button>
 <div class="rail-mask" id="railMask" hidden></div>
-
-<div class="sorter" id="sorter" aria-hidden="true">
-  <button class="sorter-cancel" id="sortCancel" type="button" hidden>取消排序 · 回到大殿</button>
-  <ul class="sorter-menu" id="sorterMenu" role="listbox" aria-label="排序方式" hidden>
-    <li><button type="button" role="option" data-sort="new" aria-selected="false">最新发布</button></li>
-    <li><button type="button" role="option" data-sort="hot" aria-selected="false">最高曝光</button></li>
-    <li><button type="button" role="option" data-sort="likes" aria-selected="false">最多点赞</button></li>
-    <li><button type="button" role="option" data-sort="bookmarks" aria-selected="false">最多收藏</button></li>
-    <li><button type="button" role="option" data-sort="old" aria-selected="false">最早发布</button></li>
-  </ul>
-  <button class="sorter-toggle" id="sorterBtn" type="button" aria-expanded="false" aria-haspopup="listbox" aria-controls="sorterMenu">
-    <span class="sorter-kicker">Sort · 排序</span>
-    <span class="sorter-now" id="sorterNow">殿堂</span>
-  </button>
-</div>
-
-<footer class="colophon">
-  <p class="colo-mark">HARA</p>
-  <p>最后更新时间：<time id="updated">—</time>（上海时间）· 每日同步自 X</p>
-  <p class="muted">作品均来自 <a href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a> 的公开帖子，图像为 AI 生成，人物均为虚构的成年模特。</p>
-  <p class="muted small">字体：Bodoni Moda、Jost（<a href="assets/fonts/OFL.txt">SIL Open Font License</a>）</p>
-</footer>
 
 <!-- VIEWER -->
 <div class="viewer" id="lb" role="dialog" aria-modal="true" aria-label="作品详情" hidden>
