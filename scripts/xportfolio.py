@@ -35,6 +35,12 @@ SERIES = [
 ]
 OTHER = "其他"
 CHARACTERS = {"韩书允", "林知夏", "姜宥娜"}
+# English names are the author's, from profile.bio and the keyword lists above. Not inferred from pictures.
+CANON_MODELS = [
+    {"zh": "韩书允", "en": "Han Seoyun"},
+    {"zh": "林知夏", "en": "Lin Zhixia"},
+    {"zh": "姜宥娜", "en": "Kang Yuna"},
+]
 
 USER_ID = "1802687195163299840"
 TCO = re.compile(r"\s*https://t\.co/\w+")
@@ -159,13 +165,39 @@ def classify(caption, prompt=""):
     return [l for _, _, l in sorted(scored)] or [OTHER]
 
 
+def model_names(post):
+    """Character labels already stored, plus names written in the author's own caption, prompt, or post text.
+
+    A name is never assigned by looking at a picture. Stored labels are kept even if a later fetch omits them."""
+    prev = [m for m in (post.get("models") or []) if m in CHARACTERS]
+    blob_cap = "\n".join([post.get("caption") or "", post.get("text") or ""])
+    blob_prompt = "\n".join([post.get("prompt") or ""] + list(post.get("thread") or []))
+    detected = [s for s in classify(blob_cap, blob_prompt) if s in CHARACTERS]
+    out = []
+    for m in prev + detected:
+        if m not in out:
+            out.append(m)
+    return out
+
+
+def _author_reply(t):
+    """True only for @GenRyoma's own reply. A present foreign author_id is never treated as ours."""
+    aid = t.get("author_id")
+    if aid and str(aid) != USER_ID:
+        return False
+    reply_to = t.get("in_reply_to_user_id")
+    if reply_to and str(reply_to) != USER_ID:
+        return False
+    return True
+
+
 def _thread_texts(responses):
     """Author self-replies: map root post id -> list of reply texts (follows reply chains)."""
     parent, texts = {}, {}
     for d in responses:
         for t in d.get("data", []) or []:
             rep = [r["id"] for r in t.get("referenced_tweets", []) if r["type"] == "replied_to"]
-            if rep and t.get("in_reply_to_user_id", USER_ID) == USER_ID and t.get("author_id", USER_ID) == USER_ID:
+            if rep and _author_reply(t):
                 parent[t["id"]] = rep[0]
                 texts[t["id"]] = TCO.sub("", (t.get("note_tweet") or {}).get("text") or t.get("text", "")).strip()
     out = {}
@@ -193,27 +225,61 @@ def evaluate(text, thread):
     return text, "", v, None
 
 
+def _photo_post(t, media):
+    refs = {r["type"] for r in t.get("referenced_tweets", [])}
+    if refs & {"retweeted", "replied_to"}:
+        return None
+    keys = (t.get("attachments") or {}).get("media_keys", [])
+    photos = [media[k] for k in keys if k in media and media[k].get("type") == "photo"]
+    if not photos:
+        return None
+    foreign = [u for u in (t.get("entities") or {}).get("urls", [])
+               if "/photo/" in u.get("expanded_url", "") and f"/{USERNAME}/" not in u.get("expanded_url", "")]
+    if foreign and len(foreign) >= len(photos):
+        return None
+    return photos
+
+
+def _base_post(t, text, thread, photos, caption, prompt, src, series, models, in_feed):
+    pm = t.get("public_metrics") or {}
+    return {
+        "id": t["id"],
+        "created_at": to_shanghai(t["created_at"]),
+        "text": text,
+        "thread": thread,
+        "caption": caption,
+        "prompt": prompt,
+        "prompt_source": src,
+        "url": f"https://x.com/{USERNAME}/status/{t['id']}",
+        "quote": "quoted" in {r["type"] for r in t.get("referenced_tweets", [])},
+        "media": [{"src": m["url"], "w": m.get("width"), "h": m.get("height")} for m in photos],
+        "images": [], "thumbs": [],
+        "metrics": {"impressions": pm.get("impression_count"), "likes": pm.get("like_count"),
+                    "bookmarks": pm.get("bookmark_count"), "reposts": pm.get("retweet_count"),
+                    "replies": pm.get("reply_count")},
+        "series": series,
+        "models": models,
+        "in_feed": in_feed,
+    }
+
+
 def normalise(responses, hidden=(), force=()):
     """responses: raw X API v2 JSON dicts (get_users_posts / search_posts_all, incl. self-reply searches).
-    Returns ({id: post} for posts that pass every rule, {id: info} for rejected / uncertain candidates)."""
-    media, posts, rejected = {}, {}, {}
+    Returns (feed posts, rejected info, model-only posts).
+
+    Feed posts carry the author's own prompt (post body or own replies). Model-only posts are the
+    author's images that name 韩书允 / 林知夏 / 姜宥娜 in that text but have no prompt. They are
+    archived for the picture galleries and are not part of the theme feed. Third-party replies are ignored."""
+    media, posts, rejected, model_only = {}, {}, {}, {}
     for d in responses:
         for m in (d.get("includes") or {}).get("media", []):
             media[m["media_key"]] = m
     threads = _thread_texts(responses)
     for d in responses:
         for t in d.get("data", []) or []:
-            refs = {r["type"] for r in t.get("referenced_tweets", [])}
-            if refs & {"retweeted", "replied_to"}:
-                continue
-            keys = (t.get("attachments") or {}).get("media_keys", [])
-            photos = [media[k] for k in keys if k in media and media[k].get("type") == "photo"]
+            photos = _photo_post(t, media)
             if not photos:
-                continue  # text-only, gif/video-only, or quote without own image
-            foreign = [u for u in (t.get("entities") or {}).get("urls", [])
-                       if "/photo/" in u.get("expanded_url", "") and f"/{USERNAME}/" not in u.get("expanded_url", "")]
-            if foreign and len(foreign) >= len(photos):
-                continue  # media borrowed from someone else's post
+                continue
             raw = ((t.get("note_tweet") or {}).get("text") or t.get("text", ""))
             text = TCO.sub("", raw).strip()
             thread = threads.get(t["id"], [])
@@ -221,32 +287,61 @@ def normalise(responses, hidden=(), force=()):
             if t["id"] in force and verdict != "yes":
                 verdict, src = "yes", src or "manual"
                 prompt = prompt or "\n\n".join([text] + thread)
-            if verdict != "yes" or t["id"] in hidden:  # later records of the same id win
+            draft = {"caption": caption if verdict == "yes" else "", "prompt": prompt if verdict == "yes" else "",
+                     "text": text, "thread": thread}
+            models = model_names(draft)
+            if t["id"] in hidden or verdict != "yes":
                 posts.pop(t["id"], None)
                 rejected[t["id"]] = {"id": t["id"], "verdict": "hidden" if t["id"] in hidden else verdict,
                                      "created_at": to_shanghai(t["created_at"]), "text": text[:200],
                                      "url": f"https://x.com/{USERNAME}/status/{t['id']}"}
+                if models and t["id"] not in hidden:
+                    model_only[t["id"]] = _base_post(t, text, thread, photos, "", "", None, list(models), models, False)
+                else:
+                    model_only.pop(t["id"], None)
                 continue
-            pm = t.get("public_metrics") or {}
             rejected.pop(t["id"], None)
-            posts[t["id"]] = {
-                "id": t["id"],
-                "created_at": to_shanghai(t["created_at"]),
-                "text": text,
-                "thread": thread,
-                "caption": caption,
-                "prompt": prompt,
-                "prompt_source": src,
-                "url": f"https://x.com/{USERNAME}/status/{t['id']}",
-                "quote": "quoted" in refs,
-                "media": [{"src": m["url"], "w": m.get("width"), "h": m.get("height")} for m in photos],
-                "images": [], "thumbs": [],
-                "metrics": {"impressions": pm.get("impression_count"), "likes": pm.get("like_count"),
-                            "bookmarks": pm.get("bookmark_count"), "reposts": pm.get("retweet_count"),
-                            "replies": pm.get("reply_count")},
-                "series": classify(caption, prompt),
-            }
-    return posts, rejected
+            model_only.pop(t["id"], None)
+            series = classify(caption, prompt)
+            posts[t["id"]] = _base_post(t, text, thread, photos, caption, prompt, src, series, model_names({
+                "caption": caption, "prompt": prompt, "text": text, "thread": thread, "models": [s for s in series if s in CHARACTERS]
+            }), True)
+    return posts, rejected, model_only
+
+
+def merge_archive(existing, incoming):
+    """Stable-id merge. Keys already archived are never deleted because a later fetch omitted them.
+
+    A post that already has a prompt stays in the theme feed. Model labels already stored are kept."""
+    added, refreshed = [], 0
+    for pid, p in incoming.items():
+        if pid in existing:
+            old = existing[pid]
+            if p.get("metrics"):
+                old["metrics"] = p["metrics"]
+            if p.get("in_feed", True) and p.get("prompt"):
+                for k in ("thread", "caption", "prompt", "prompt_source", "series", "text", "url"):
+                    if k in p:
+                        old[k] = p[k]
+                old["in_feed"] = True
+            elif old.get("in_feed") is None and old.get("prompt"):
+                old["in_feed"] = True
+            old["models"] = model_names({"models": (old.get("models") or []) + (p.get("models") or []),
+                                         "caption": old.get("caption") or "", "prompt": old.get("prompt") or "",
+                                         "text": old.get("text") or "", "thread": old.get("thread") or []})
+            if p.get("images") and not old.get("images"):
+                old["images"] = p["images"]
+                old["thumbs"] = p.get("thumbs") or []
+                old["media"] = p.get("media") or old.get("media")
+            refreshed += 1
+        else:
+            existing[pid] = p
+            added.append(pid)
+    for old in existing.values():
+        if old.get("prompt") and old.get("in_feed") is None:
+            old["in_feed"] = True
+        old["models"] = model_names(old)
+    return existing, added, refreshed
 
 
 def _get(url, path, tries=3):
@@ -377,7 +472,8 @@ def save(posts, profile=None):
         "profile": profile or old.get("profile", {}),
         "last_updated": datetime.now(SHANGHAI).isoformat(timespec="seconds"),
         # only series that currently have works (e.g. 韩书允/姜宥娜 appear once they have a post with a prompt)
-        "series_order": [s for s in [x[0] for x in SERIES] + [OTHER] if any(s in p["series"] for p in posts.values())],
+        "series_order": [s for s in [x[0] for x in SERIES] + [OTHER] if any(s in p.get("series") or [] for p in posts.values())],
+        "models_index": CANON_MODELS,
         "posts": sorted(posts.values(), key=lambda p: int(p["id"]), reverse=True),
     }
     tmp = DATA + ".tmp"

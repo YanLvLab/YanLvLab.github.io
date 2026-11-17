@@ -270,6 +270,10 @@ body.lock .rail{opacity:0;visibility:hidden;pointer-events:none}
 /* ---------- viewer ---------- */
 .viewer{position:fixed;inset:0;z-index:100;display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,400px);grid-template-rows:auto minmax(0,1fr);
   background:#090807;overflow:hidden}
+.viewer.is-silent{grid-template-columns:minmax(0,1fr)}
+.viewer.is-silent .v-panel{display:none}
+.model-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;align-items:start;width:min(1440px,100%);margin:0 auto;padding:12px var(--pad) 48px}
+.model-gallery .empty{padding:12px 0 28px}
 .viewer[hidden]{display:none}
 .viewer.opening{animation:vIn .28s var(--ease) both}
 @keyframes vIn{from{opacity:0}to{opacity:1}}

@@ -142,7 +142,12 @@
     return rows;
   }
 
-  let CFG = null, DATA = null, ALL = [], NO = new Map(), HALLS = [];
+  let CFG = null, DATA = null, ALL = [], ARCHIVE = [], NO = new Map(), HALLS = [];
+  const MODEL_FALLBACK = [
+    { zh: "韩书允", en: "Han Seoyun" },
+    { zh: "林知夏", en: "Lin Zhixia" },
+    { zh: "姜宥娜", en: "Kang Yuna" },
+  ];
   const SORTS = { new: "最新发布", hot: "最高曝光", likes: "最多点赞", bookmarks: "最多收藏", old: "最早发布" };
   const FEATURED = { new: "最新之作", hot: "镇殿之作", likes: "最多点赞", bookmarks: "最多收藏", old: "最早之作" };
   const NEVER_CAT = new Set(["其他", "偏殿", "韩书允", "林知夏", "姜宥娜"]);
@@ -198,6 +203,36 @@
     HALLS = halls;
   }
 
+  const modelIndex = () => (DATA && DATA.models_index && DATA.models_index.length) ? DATA.models_index : MODEL_FALLBACK;
+  const modelIds = (p) => {
+    const raw = [...(p.models || []), ...(p.series || [])];
+    return modelIndex().map((m) => m.zh).filter((zh) => raw.includes(zh));
+  };
+  const modelPosts = (zh) => ARCHIVE.filter((p) => modelIds(p).includes(zh));
+  const pictureHTML = (p, i) => {
+    const n = p.images.length; const no = pad3(NO.get(p.id));
+    const img = `<img src="${esc(thumbOf(p))}" alt="" loading="lazy" decoding="async"${dims(p)}>`;
+    const tab = n > 1 ? `<span class="tab-count">${n} 张</span>` : "";
+    const plaque = `<span class="plaque"><span class="work-no">Nº ${no}</span></span>`;
+    return `<button type="button" class="work work-picture rv" data-id="${p.id}" data-i="${i}" data-silent="1" aria-label="图片 Nº ${no}">
+      ${relic(img, { tab, plaque })}</button>`;
+  };
+  function renderModels() {
+    const host = $("#modelGalleries"); if (!host) return;
+    host.innerHTML = modelIndex().map((m) => {
+      const posts = modelPosts(m.zh);
+      const cells = posts.length ? `<div class="model-gallery">${posts.map((p, i) => pictureHTML(p, i)).join("")}</div>`
+        : `<p class="empty">此角色廊还没有已归档的图片。</p>`;
+      return `<section class="hall model-hall" id="model-${esc(m.zh)}" data-model="${esc(m.zh)}" aria-labelledby="model-${esc(m.zh)}-t">
+        <header class="hall-head">
+          <h2 class="hall-title" id="model-${esc(m.zh)}-t">${esc(m.zh)}</h2>
+          <p class="hall-en">${esc(m.en)}</p>
+          <p class="hall-count">${posts.length} 张图片</p>
+        </header>
+        ${cells}
+      </section>`;
+    }).join("");
+  }
   const workHTML = (p, i, cls = "") => {
     const t = esc(titleOf(p)); const n = p.images.length; const no = pad3(NO.get(p.id));
     const img = `<img src="${esc(thumbOf(p))}" alt="${t}" loading="lazy" decoding="async"${dims(p)}>`;
@@ -305,7 +340,8 @@
   function renderRail() {
     const nav = $("#railNav"); if (!nav) return;
     const allOn = isFlat() && !flatFilter;
-    nav.innerHTML = (isFlat() ? `<a href="#flat" class="rail-all${allOn ? " on" : ""}" data-rail="*">全部<span>${ALL.length}</span></a>` : "")
+    const modelLinks = modelIndex().map((m) => `<a href="#model-${esc(m.zh)}" data-model="${esc(m.zh)}"><em>M</em><b>${esc(m.zh)}</b><i>${esc(m.en)}</i><span>${modelPosts(m.zh).length}</span></a>`).join("");
+    nav.innerHTML = modelLinks + (isFlat() ? `<a href="#flat" class="rail-all${allOn ? " on" : ""}" data-rail="*">全部<span>${ALL.length}</span></a>` : "")
       + HALLS.map((h) => `<a href="#${h.id}" data-rail="${esc(h.name)}" class="${isFlat() && flatFilter === h.name ? "on" : ""}"><em>${h.roman}</em><b>${esc(h.name)}</b><i>${esc(h.en)}</i><span>${h.posts.length}</span></a>`).join("");
   }
   function setRailCurrent(id) {
@@ -408,9 +444,10 @@
 
   // ---------- viewer
   const lb = $("#lb");
-  function openViewer(list, i, k = 0, label = "", from = null) {
+  function openViewer(list, i, k = 0, label = "", from = null, silent = false) {
     if (!list[i]) return;
-    ctx = { list, label }; lastFocus = from || document.activeElement;
+    ctx = { list, label, silent: !!silent }; lastFocus = from || document.activeElement;
+    lb.classList.toggle("is-silent", !!silent);
     const wasOpen = !lb.hidden;
     lb.hidden = false; if (!wasOpen) { lock(); lb.classList.remove("opening"); void lb.offsetWidth; if (!reduced) lb.classList.add("opening"); }
     show(i, k, 0);
@@ -428,8 +465,11 @@
     $("#lbTags").innerHTML = p.series.map((s) => `<span>${esc(s)}</span>`).join("");
     const M = p.metrics;
     $("#lbMetrics").innerHTML = [["曝光", M.impressions], ["点赞", M.likes], ["收藏", M.bookmarks]].map(([l, v]) => `<div><b>${fmt(v)}</b>${l}</div>`).join("");
-    $("#lbPrompt").innerHTML = promptHTML(p.prompt || ""); $("#lbPrompt").classList.remove("sel");
-    $("#lbPromptWrap").hidden = !p.prompt;
+    const silent = !!ctx.silent;
+    $("#lbPrompt").innerHTML = silent ? "" : promptHTML(p.prompt || ""); $("#lbPrompt").classList.remove("sel");
+    $("#lbPromptWrap").hidden = silent || !p.prompt;
+    if (silent) { $("#lbCaption").textContent = ""; $("#vCaption").textContent = ""; $("#vCaption").hidden = true; $("#lbTags").innerHTML = ""; $("#lbMetrics").innerHTML = ""; $("#lbDate").textContent = ""; }
+    const xlink = $("#lbLink"); if (xlink) xlink.hidden = silent;
     resetCopy();
     $("#lbLink").href = p.url;
     history.replaceState(null, "", "#p=" + p.id);
@@ -595,6 +635,12 @@
     ap.onclick = () => archGo(-1); an.onclick = () => archGo(1);
     ar.addEventListener("scroll", archState, { passive: true }); addEventListener("resize", archState); archState();
     const listFor = (el) => {
+      const model = el.closest(".model-hall");
+      if (model) {
+        const spec = modelIndex().find((m) => m.zh === model.dataset.model);
+        const list = spec ? modelPosts(spec.zh) : [];
+        return [list, spec ? spec.zh + " · " + spec.en : "角色"];
+      }
       if (isFlat() || el.closest("#flat")) {
         const label = "全部 · " + (SORTS[siteSort] || "") + (flatFilter ? " · " + flatFilter : "");
         return [flatView, label];
@@ -623,6 +669,13 @@
       const a = e.target.closest("a[data-rail]");
       if (!a) {
         if (e.target.closest(".rail-home")) setRailOpen(false);
+        const modelLink = e.target.closest("a[data-model]");
+        if (modelLink) {
+          e.preventDefault();
+          setRailOpen(false);
+          const t = document.querySelector(modelLink.getAttribute("href"));
+          if (t) t.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+        }
         return;
       }
       if (isFlat()) {
@@ -640,7 +693,7 @@
     });
     document.addEventListener("click", (e) => {
       const w = e.target.closest(".work, .colossus-frame");
-      if (w) { const [list, label] = listFor(w); openViewer(list, +w.dataset.i, 0, label, w); return; }
+      if (w) { const [list, label] = listFor(w); openViewer(list, +w.dataset.i, 0, label, w, w.dataset.silent === "1"); return; }
     });
     const sorterBtn = $("#sorterBtn"), sorterMenu = $("#sorterMenu");
     sorterBtn.addEventListener("click", (e) => {
@@ -707,9 +760,11 @@
     .then((c) => { CFG = c && typeof c === "object" ? c : null; gate(CFG); return CFG; });
   Promise.all([cfgP, fetch("data/posts.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("posts.json " + r.status); return r.json(); })]).then(([, d]) => {
     DATA = d;
-    ALL = (d.posts || []).filter((p) => p && p.id && p.images && p.images.length).map((p) => ({ ...p, series: p.series || [], metrics: p.metrics || {} })).sort(newest);
+    const loaded = (d.posts || []).filter((p) => p && p.id && p.images && p.images.length && !p.suppressed).map((p) => ({ ...p, series: p.series || [], models: p.models || [], metrics: p.metrics || {} })).sort(newest);
+    ARCHIVE = loaded;
+    ALL = loaded.filter((p) => p.in_feed !== false);
     ALL.slice().reverse().forEach((p, i) => NO.set(p.id, i + 1));
-    buildHalls(); renderProfile(); renderCover(); renderAtrium(); renderHalls(); syncSortUI(); bind();
+    buildHalls(); renderProfile(); renderCover(); renderAtrium(); renderModels(); renderHalls(); syncSortUI(); bind();
     observe(document); motion();
     const m = location.hash.match(/p=(\d+)/);
     if (m) {
