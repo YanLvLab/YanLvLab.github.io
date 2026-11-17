@@ -676,7 +676,11 @@
           e.preventDefault();
           setRailOpen(false);
           const t = document.querySelector(modelLink.getAttribute("href"));
-          if (t) t.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+          if (t) {
+            const scroller = document.querySelector("main");
+            const top = t.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 16;
+            scroller.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
+          }
         }
         return;
       }
