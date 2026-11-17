@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>YLL·Hara — AI 时尚影像作品集</title>
 <meta name="description" content="YLL·Hara（@GenRyoma）的 AI 生图作品集：时装写真、夜拍、新中式、泳装与城市日常，每件作品附提示词。每日同步自 X。">
-<meta name="theme-color" content="#07070a">
+<meta name="theme-color" content="#0c0b0a">
 <!-- robots:start --><!-- robots:end -->
 <link rel="canonical" href="https://yanlvlab.github.io/">
 <meta property="og:type" content="website">
@@ -31,32 +31,51 @@
 <body>
 <a class="skip" href="#atrium">跳到诸殿</a>
 
-<header class="bar" id="bar" aria-label="站点导航">
+<header class="bar on" id="bar" aria-label="站点导航">
   <a class="bar-mark" href="#top" aria-label="回到封面">HARA<span>作品集</span></a>
+  <div class="sorter" id="sorter">
+    <button class="sorter-cancel" id="sortCancel" type="button" hidden>取消排序 · 回到大殿</button>
+    <button class="sorter-toggle" id="sorterBtn" type="button" aria-expanded="false" aria-haspopup="listbox" aria-controls="sorterMenu">
+      <span class="sorter-kicker">Sort · 排序</span>
+      <span class="sorter-now" id="sorterNow">殿堂</span>
+    </button>
+  </div>
   <nav class="bar-nav">
     <button class="bar-btn" id="tocBtn" type="button" aria-expanded="false" aria-controls="rail">目录 <i>Index</i></button>
     <a class="bar-btn bar-x" href="https://x.com/GenRyoma" target="_blank" rel="noopener" aria-label="在 X 上关注 @GenRyoma"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
   </nav>
+  <ul class="sorter-menu" id="sorterMenu" role="listbox" aria-label="排序方式" hidden>
+    <li><button type="button" role="option" data-sort="new" aria-selected="false">最新发布</button></li>
+    <li><button type="button" role="option" data-sort="hot" aria-selected="false">最高曝光</button></li>
+    <li><button type="button" role="option" data-sort="likes" aria-selected="false">最多点赞</button></li>
+    <li><button type="button" role="option" data-sort="bookmarks" aria-selected="false">最多收藏</button></li>
+    <li><button type="button" role="option" data-sort="old" aria-selected="false">最早发布</button></li>
+  </ul>
 </header>
 
 <main id="top">
   <!-- I. COVER -->
   <section class="cover" id="cover" aria-label="封面">
-    <div class="fog fog-a" aria-hidden="true"></div>
+    <div class="veil" aria-hidden="true"></div>
     <div class="pillar pillar-l" aria-hidden="true"></div>
     <div class="pillar pillar-r" aria-hidden="true"></div>
     <h1 class="visually-hidden">YLL·Hara 作品集</h1>
-    <div class="cover-figure" id="coverFigure">
-      <button class="cover-img" id="coverBtn" type="button" aria-label="打开封面作品">
-        <img id="coverImg" alt="" fetchpriority="high" decoding="async">
-      </button>
+    <div class="cover-stage">
+      <div class="cover-figure" id="coverFigure">
+        <button class="cover-img relic relic-cover" id="coverBtn" type="button" aria-label="打开封面作品">
+          <span class="edge n" aria-hidden="true"></span>
+          <span class="edge e" aria-hidden="true"></span>
+          <span class="edge s" aria-hidden="true"></span>
+          <span class="edge w" aria-hidden="true"></span>
+          <span class="well"><img id="coverImg" alt="" fetchpriority="high" decoding="async"></span>
+        </button>
+      </div>
     </div>
     <div class="cover-byline" id="coverByline">
       <img class="avatar" id="avatar" src="images/avatar.jpg" alt="YLL·Hara 头像" width="64" height="64">
       <div class="cover-who">
         <b id="name">YLL·Hara</b>
         <a id="handle" href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a>
-        <p class="bio" id="bio"></p>
       </div>
       <div class="stats" id="stats"></div>
     </div>
@@ -67,6 +86,14 @@
   <section class="letter" id="letter" aria-label="卷首语">
     <p class="letter-kicker">Editor’s Letter · 卷首语</p>
     <p class="letter-text">每一幅作品旁都留有一段咒语，那是召唤她们的方式。</p>
+    <div class="letter-meta">
+      <img class="avatar" id="letterAvatar" src="images/avatar.jpg" alt="" width="64" height="64">
+      <div class="letter-who">
+        <b id="letterName">YLL·Hara</b>
+        <a id="letterHandle" href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a>
+        <p class="bio" id="bio"></p>
+      </div>
+    </div>
   </section>
 
   <!-- III. ATRIUM: hall index -->
@@ -96,6 +123,13 @@
     <p class="empty" id="empty" hidden>这个分类暂时没有作品。</p>
     <noscript><p class="empty">请启用 JavaScript 浏览作品集。</p></noscript>
   </section>
+
+  <footer class="colophon">
+    <p class="colo-mark">HARA</p>
+    <p>最后更新时间：<time id="updated">—</time>（上海时间）· 每日同步自 X</p>
+    <p class="muted">作品均来自 <a href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a> 的公开帖子，图像为 AI 生成，人物均为虚构的成年模特。</p>
+    <p class="muted small">字体：Bodoni Moda、Jost（<a href="assets/fonts/OFL.txt">SIL Open Font License</a>）</p>
+  </footer>
 </main>
 
 <aside class="rail" id="rail" aria-label="诸殿导航">
@@ -104,28 +138,6 @@
 </aside>
 <button class="rail-open" id="railOpen" type="button" aria-expanded="false" aria-controls="rail" aria-label="打开诸殿目录">诸殿</button>
 <div class="rail-mask" id="railMask" hidden></div>
-
-<div class="sorter" id="sorter" aria-hidden="true">
-  <button class="sorter-cancel" id="sortCancel" type="button" hidden>取消排序 · 回到大殿</button>
-  <ul class="sorter-menu" id="sorterMenu" role="listbox" aria-label="排序方式" hidden>
-    <li><button type="button" role="option" data-sort="new" aria-selected="false">最新发布</button></li>
-    <li><button type="button" role="option" data-sort="hot" aria-selected="false">最高曝光</button></li>
-    <li><button type="button" role="option" data-sort="likes" aria-selected="false">最多点赞</button></li>
-    <li><button type="button" role="option" data-sort="bookmarks" aria-selected="false">最多收藏</button></li>
-    <li><button type="button" role="option" data-sort="old" aria-selected="false">最早发布</button></li>
-  </ul>
-  <button class="sorter-toggle" id="sorterBtn" type="button" aria-expanded="false" aria-haspopup="listbox" aria-controls="sorterMenu">
-    <span class="sorter-kicker">Sort · 排序</span>
-    <span class="sorter-now" id="sorterNow">殿堂</span>
-  </button>
-</div>
-
-<footer class="colophon">
-  <p class="colo-mark">HARA</p>
-  <p>最后更新时间：<time id="updated">—</time>（上海时间）· 每日同步自 X</p>
-  <p class="muted">作品均来自 <a href="https://x.com/GenRyoma" target="_blank" rel="noopener">@GenRyoma</a> 的公开帖子，图像为 AI 生成，人物均为虚构的成年模特。</p>
-  <p class="muted small">字体：Bodoni Moda、Jost（<a href="assets/fonts/OFL.txt">SIL Open Font License</a>）</p>
-</footer>
 
 <!-- VIEWER -->
 <div class="viewer" id="lb" role="dialog" aria-modal="true" aria-label="作品详情" hidden>
@@ -136,9 +148,17 @@
   </div>
   <div class="v-stage" id="lbStage">
     <button class="v-nav v-prev" id="lbPrev" type="button" aria-label="上一张（←）"><i></i></button>
-    <figure class="v-figure" id="vFigure"><img id="lbImg" alt=""></figure>
+    <div class="v-canvas">
+      <figure class="v-figure relic relic-view" id="vFigure">
+        <span class="edge n" aria-hidden="true"></span>
+        <span class="edge e" aria-hidden="true"></span>
+        <span class="edge s" aria-hidden="true"></span>
+        <span class="edge w" aria-hidden="true"></span>
+        <span class="well"><img id="lbImg" alt=""></span>
+      </figure>
+      <div class="v-dots" id="lbDots"></div>
+    </div>
     <button class="v-nav v-next" id="lbNext" type="button" aria-label="下一张（→）"><i></i></button>
-    <div class="v-dots" id="lbDots"></div>
   </div>
   <aside class="v-panel" id="vPanel">
     <time class="v-date" id="lbDate"></time>
