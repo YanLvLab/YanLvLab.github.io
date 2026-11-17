@@ -204,11 +204,23 @@
   }
 
   const modelIndex = () => (DATA && DATA.models_index && DATA.models_index.length) ? DATA.models_index : MODEL_FALLBACK;
-  const modelIds = (p) => {
-    const raw = [...(p.models || []), ...(p.series || [])];
-    return modelIndex().map((m) => m.zh).filter((zh) => raw.includes(zh));
+  const modelSlides = (zh) => {
+    const slides = [];
+    ARCHIVE.forEach((p) => {
+      const labels = p.image_models || [];
+      (p.images || []).forEach((src, k) => {
+        if (labels[k] !== zh) return;
+        slides.push({
+          ...p,
+          images: [src],
+          thumbs: p.thumbs && p.thumbs[k] ? [p.thumbs[k]] : [src],
+          media: p.media && p.media[k] ? [p.media[k]] : [],
+          image_models: [zh],
+        });
+      });
+    });
+    return slides;
   };
-  const modelPosts = (zh) => ARCHIVE.filter((p) => modelIds(p).includes(zh));
   const pictureHTML = (p, i, k) => {
     const src = (p.thumbs && p.thumbs[k]) || p.images[k];
     const m = (p.media && p.media[k]) || {};
@@ -220,9 +232,9 @@
   function renderModels() {
     const host = $("#modelGalleries"); if (!host) return;
     host.innerHTML = modelIndex().map((m) => {
-      const posts = modelPosts(m.zh);
-      const nImg = posts.reduce((s, p) => s + (p.images || []).length, 0);
-      const tiles = posts.flatMap((p, i) => (p.images || []).map((_, k) => pictureHTML(p, i, k)));
+      const slides = modelSlides(m.zh);
+      const nImg = slides.length;
+      const tiles = slides.map((p, i) => pictureHTML(p, i, 0));
       const cells = tiles.length ? `<div class="model-gallery">${tiles.join("")}</div>`
         : `<p class="empty">此角色廊还没有已归档的图片。</p>`;
       return `<section class="hall model-hall" id="model-${esc(m.zh)}" data-model="${esc(m.zh)}" aria-labelledby="model-${esc(m.zh)}-t">
@@ -342,7 +354,7 @@
   function renderRail() {
     const nav = $("#railNav"); if (!nav) return;
     const allOn = isFlat() && !flatFilter;
-    const modelLinks = modelIndex().map((m) => `<a href="#model-${esc(m.zh)}" data-model="${esc(m.zh)}"><em>M</em><b>${esc(m.zh)}</b><i>${esc(m.en)}</i><span>${modelPosts(m.zh).reduce((s, p) => s + (p.images || []).length, 0)}</span></a>`).join("");
+    const modelLinks = modelIndex().map((m) => `<a href="#model-${esc(m.zh)}" data-model="${esc(m.zh)}"><em>M</em><b>${esc(m.zh)}</b><i>${esc(m.en)}</i><span>${modelSlides(m.zh).length}</span></a>`).join("");
     nav.innerHTML = modelLinks + (isFlat() ? `<a href="#flat" class="rail-all${allOn ? " on" : ""}" data-rail="*">全部<span>${ALL.length}</span></a>` : "")
       + HALLS.map((h) => `<a href="#${h.id}" data-rail="${esc(h.name)}" class="${isFlat() && flatFilter === h.name ? "on" : ""}"><em>${h.roman}</em><b>${esc(h.name)}</b><i>${esc(h.en)}</i><span>${h.posts.length}</span></a>`).join("");
   }
@@ -640,7 +652,7 @@
       const model = el.closest(".model-hall");
       if (model) {
         const spec = modelIndex().find((m) => m.zh === model.dataset.model);
-        const list = spec ? modelPosts(spec.zh) : [];
+        const list = spec ? modelSlides(spec.zh) : [];
         return [list, spec ? spec.zh + " · " + spec.en : "角色"];
       }
       if (isFlat() || el.closest("#flat")) {
@@ -676,7 +688,11 @@
           e.preventDefault();
           setRailOpen(false);
           const t = document.querySelector(modelLink.getAttribute("href"));
-          if (t) t.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+          if (t) {
+            const scroller = document.querySelector("main");
+            const top = t.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 16;
+            scroller.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
+          }
         }
         return;
       }
