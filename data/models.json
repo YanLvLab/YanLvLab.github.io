@@ -1,0 +1,47 @@
+{
+  "_note": "Model halls show only assignments. Labels are the confirmed bilingual names. pending_review is never assigned and is not shown in a hall. seeds are published posts to archive when they are absent from a fetch; do not point seeds at local generation folders. Merge is incremental: do not delete an assignment because a fetch missed the post.",
+  "order": ["韩书允", "林知夏", "姜宥娜"],
+  "labels": {
+    "韩书允": "韩书允 Han Seoyun",
+    "林知夏": "林知夏 Lin Zhixia",
+    "姜宥娜": "姜宥娜 Kang Yuna"
+  },
+  "assignments": {
+    "2117461257389498407": ["林知夏"],
+    "2113584396582412739": ["韩书允"],
+    "2108388958526964003": ["韩书允"]
+  },
+  "pending_review": ["2117870734303531012"],
+  "seeds": [
+    {
+      "id": "2113584396582412739",
+      "created_at": "2026-10-23T18:52:43+08:00",
+      "text": "Wanna drink coffee with Seoyun？",
+      "url": "https://x.com/GenRyoma/status/2113584396582412739",
+      "media": [
+        {"src": "https://pbs.twimg.com/media/HVT1iv_agAAe5D5.jpg", "w": 1122, "h": 1402}
+      ]
+    },
+    {
+      "id": "2108388958526964003",
+      "created_at": "2026-10-09T10:47:54+08:00",
+      "text": "韩书允向大家问好",
+      "url": "https://x.com/GenRyoma/status/2108388958526964003",
+      "media": [
+        {"src": "https://pbs.twimg.com/media/HUKAdVWbcAAa1yu.jpg", "w": 1122, "h": 1402},
+        {"src": "https://pbs.twimg.com/media/HUKAdVWaEAA3YOF.jpg", "w": 1122, "h": 1402},
+        {"src": "https://pbs.twimg.com/media/HUKAdVfbEAAmw--.jpg", "w": 1122, "h": 1402}
+      ]
+    },
+    {
+      "id": "2117870734303531012",
+      "created_at": "2026-11-04T14:45:05+08:00",
+      "text": "又搓了两位虚拟模特 / 韩书允 Han Seoyun & 姜宥娜 Kang Yuna & 林知夏 Lin Zhixia",
+      "url": "https://x.com/GenRyoma/status/2117870734303531012",
+      "note": "正文同时列出三名，只有 1 张图，作者未说明图中是谁。归档，不进入任一模特专区。",
+      "media": [
+        {"src": "https://pbs.twimg.com/media/HWQwJuZbQAEtbKO.jpg"}
+      ]
+    }
+  ]
+}

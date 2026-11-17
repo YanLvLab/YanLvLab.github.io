@@ -9,6 +9,25 @@ DATA = os.path.join(ROOT, "data", "posts.json")
 HIDDEN = os.path.join(ROOT, "data", "hidden.json")
 SHANGHAI = timezone(timedelta(hours=8))
 USERNAME = "GenRyoma"
+DOWNLOAD_TRIES = 3
+DOWNLOAD_BACKOFF = 2.0
+# Confirmed by the author bio. Display strings live in data/models.json; do not invent spellings.
+MODEL_IDS = ("韩书允", "林知夏", "姜宥娜")
+# Explicit series for two 2026-11-17 posts. Applied only when that id is ingested, not guessed for others.
+SERIES_OVERRIDES = {
+    "2122709469771845802": ["丝袜", "内衣私房", "夜拍"],
+    "2122499964274127038": ["内衣私房", "城市日常"],
+}
+
+
+def configure(root):
+    """Point data/image paths at another tree (retention fixture). Does not touch the live site."""
+    global ROOT, IMG_DIR, THUMB_DIR, DATA, HIDDEN
+    ROOT = os.path.abspath(root)
+    IMG_DIR = os.path.join(ROOT, "images")
+    THUMB_DIR = os.path.join(IMG_DIR, "thumb")
+    DATA = os.path.join(ROOT, "data", "posts.json")
+    HIDDEN = os.path.join(ROOT, "data", "hidden.json")
 
 # ---- series rules: (label, keywords, exclude-phrases). See classify() for how they are scored.
 SERIES = [
@@ -193,10 +212,59 @@ def evaluate(text, thread):
     return text, "", v, None
 
 
-def normalise(responses, hidden=(), force=()):
+def apply_series_override(post):
+    spec = SERIES_OVERRIDES.get(str(post.get("id") or ""))
+    if spec:
+        post["series"] = list(spec)
+    return post
+
+
+def load_models():
+    """data/models.json allow-list. Pending-review ids are never assigned, even if listed by mistake."""
+    path = os.path.join(ROOT, "data", "models.json")
+    try:
+        d = json.load(open(path, encoding="utf-8"))
+    except FileNotFoundError:
+        d = {}
+    pending = [str(x) for x in d.get("pending_review") or []]
+    assignments = {}
+    for k, v in (d.get("assignments") or {}).items():
+        if str(k) in pending:
+            continue
+        names = [m for m in (v or []) if m in MODEL_IDS]
+        if names:
+            assignments[str(k)] = names
+    return {
+        "order": list(d.get("order") or MODEL_IDS),
+        "labels": dict(d.get("labels") or {}),
+        "assignments": assignments,
+        "pending_review": pending,
+        "seeds": list(d.get("seeds") or []),
+    }
+
+
+def _metrics(t):
+    pm = t.get("public_metrics") or {}
+    return {"impressions": pm.get("impression_count"), "likes": pm.get("like_count"),
+            "bookmarks": pm.get("bookmark_count"), "reposts": pm.get("retweet_count"),
+            "replies": pm.get("reply_count")}
+
+
+def normalise(responses, hidden=(), force=(), models_doc=None):
     """responses: raw X API v2 JSON dicts (get_users_posts / search_posts_all, incl. self-reply searches).
-    Returns ({id: post} for posts that pass every rule, {id: info} for rejected / uncertain candidates)."""
-    media, posts, rejected = {}, {}, {}
+
+    Returns (main, archive, rejected):
+      main     posts that pass the prompt rule (added to the main halls; hidden.json only hides them in the UI)
+      archive  allow-listed model photos without a prompt, and pending-review photos (stored, not shown in a model hall)
+      rejected posts seen this fetch that are not main-hall material (review log only; never a delete list)
+
+    `hidden` is accepted so older callers keep working. It does not drop a record.
+    """
+    _ = hidden
+    doc = models_doc or load_models()
+    allow = doc["assignments"]
+    pending = set(doc["pending_review"])
+    media, main, archive, rejected = {}, {}, {}, {}
     for d in responses:
         for m in (d.get("includes") or {}).get("media", []):
             media[m["media_key"]] = m
@@ -218,39 +286,116 @@ def normalise(responses, hidden=(), force=()):
             text = TCO.sub("", raw).strip()
             thread = threads.get(t["id"], [])
             caption, prompt, verdict, src = evaluate(text, thread)
-            if t["id"] in force and verdict != "yes":
+            tid = str(t["id"])
+            if tid in force and verdict != "yes" and tid not in pending:
                 verdict, src = "yes", src or "manual"
                 prompt = prompt or "\n\n".join([text] + thread)
-            if verdict != "yes" or t["id"] in hidden:  # later records of the same id win
-                posts.pop(t["id"], None)
-                rejected[t["id"]] = {"id": t["id"], "verdict": "hidden" if t["id"] in hidden else verdict,
-                                     "created_at": to_shanghai(t["created_at"]), "text": text[:200],
-                                     "url": f"https://x.com/{USERNAME}/status/{t['id']}"}
-                continue
-            pm = t.get("public_metrics") or {}
-            rejected.pop(t["id"], None)
-            posts[t["id"]] = {
-                "id": t["id"],
+            models = [] if tid in pending else list(allow.get(tid) or [])
+            record = {
+                "id": tid,
                 "created_at": to_shanghai(t["created_at"]),
                 "text": text,
                 "thread": thread,
                 "caption": caption,
                 "prompt": prompt,
                 "prompt_source": src,
-                "url": f"https://x.com/{USERNAME}/status/{t['id']}",
+                "url": f"https://x.com/{USERNAME}/status/{tid}",
                 "quote": "quoted" in refs,
                 "media": [{"src": m["url"], "w": m.get("width"), "h": m.get("height")} for m in photos],
                 "images": [], "thumbs": [],
-                "metrics": {"impressions": pm.get("impression_count"), "likes": pm.get("like_count"),
-                            "bookmarks": pm.get("bookmark_count"), "reposts": pm.get("retweet_count"),
-                            "replies": pm.get("reply_count")},
-                "series": classify(caption, prompt),
+                "metrics": _metrics(t),
+                "series": classify(caption, prompt) if verdict == "yes" else [],
+                "models": models,
             }
-    return posts, rejected
+            info = {"id": tid, "verdict": verdict, "created_at": record["created_at"],
+                    "text": text[:200], "url": record["url"], "metrics": record["metrics"]}
+            if tid in pending:
+                record["main_hall"] = False
+                record["models"] = []
+                record["series"] = []
+                record["prompt"] = ""
+                record["prompt_source"] = None
+                archive[tid] = record
+                info["verdict"] = "review"
+                rejected[tid] = info
+                continue
+            if verdict == "yes":
+                apply_series_override(record)
+                main[tid] = record
+                continue
+            if models:
+                record["main_hall"] = False
+                record["series"] = []
+                record["prompt"] = ""
+                record["prompt_source"] = None
+                record["caption"] = text
+                archive[tid] = record
+                rejected[tid] = info
+                continue
+            rejected[tid] = info
+    return main, archive, rejected
 
 
-def _get(url, path, tries=3):
-    for i in range(tries):
+def apply_model_assignments(posts, models_doc=None):
+    """Copy the allow-list onto stored posts. Never assign a pending-review id."""
+    doc = models_doc or load_models()
+    pending = set(doc["pending_review"])
+    for pid, models in doc["assignments"].items():
+        if pid in pending or pid not in posts:
+            continue
+        posts[pid]["models"] = list(models)
+    for pid, p in posts.items():
+        if str(pid) in pending:
+            p["models"] = []
+            p["main_hall"] = False
+
+
+def merge_model_seeds(posts, models_doc=None):
+    """Add allow-listed or pending-review posts that are not in this fetch, using data/models.json seeds.
+
+    Does not read local generation folders. Existing ids are left untouched (images included).
+    """
+    doc = models_doc or load_models()
+    pending = set(doc["pending_review"])
+    allow = doc["assignments"]
+    added = []
+    for seed in doc["seeds"]:
+        pid = str(seed.get("id") or "")
+        if not pid or pid in posts:
+            continue
+        if pid in pending:
+            models = []
+        elif pid in allow:
+            models = list(allow[pid])
+        else:
+            continue
+        post = {
+            "id": pid,
+            "created_at": seed.get("created_at") or "",
+            "text": seed.get("text") or "",
+            "thread": [],
+            "caption": seed.get("text") or "",
+            "prompt": "",
+            "prompt_source": None,
+            "url": seed.get("url") or f"https://x.com/{USERNAME}/status/{pid}",
+            "quote": False,
+            "media": [{"src": m.get("src"), "w": m.get("w"), "h": m.get("h")} for m in seed.get("media") or [] if m.get("src")],
+            "images": [], "thumbs": [],
+            "metrics": {"impressions": None, "likes": None, "bookmarks": None, "reposts": None, "replies": None},
+            "series": [],
+            "main_hall": False,
+            "models": models,
+        }
+        download(post)
+        posts[pid] = post
+        added.append(pid)
+        print("archived", pid, "models", models or "pending-review", "images", len(post["images"]))
+    return added
+
+
+def _get(url, path, tries=None):
+    n = DOWNLOAD_TRIES if tries is None else tries
+    for i in range(n):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 portfolio-sync"})
             with urllib.request.urlopen(req, timeout=60) as r, open(path + ".part", "wb") as f:
@@ -258,7 +403,8 @@ def _get(url, path, tries=3):
             os.replace(path + ".part", path)
             return True
         except Exception as e:
-            print("  retry", url, e, file=sys.stderr); time.sleep(2 * (i + 1))
+            print("  retry", url, e, file=sys.stderr)
+            time.sleep(DOWNLOAD_BACKOFF * (i + 1))
     return False
 
 
@@ -313,6 +459,25 @@ def _photos_from_responses(responses):
     return out
 
 
+def _snapshot_files(post):
+    """Bytes of the post's current local images, so a failed override download can put them back."""
+    blobs = {}
+    for rel in list(post.get("images") or []) + list(post.get("thumbs") or []):
+        fp = os.path.join(ROOT, rel)
+        if os.path.isfile(fp):
+            with open(fp, "rb") as f:
+                blobs[rel] = f.read()
+    return {"images": list(post.get("images") or []), "thumbs": list(post.get("thumbs") or []), "blobs": blobs}
+
+
+def _restore_files(snapshot):
+    for rel, blob in snapshot["blobs"].items():
+        fp = os.path.join(ROOT, rel)
+        os.makedirs(os.path.dirname(fp), exist_ok=True)
+        with open(fp, "wb") as f:
+            f.write(blob)
+
+
 def _clear_downloaded(post):
     for rel in list(post.get("images") or []) + list(post.get("thumbs") or []):
         fp = os.path.join(ROOT, rel)
@@ -330,8 +495,11 @@ def _clear_downloaded(post):
     post["images"], post["thumbs"] = [], []
 
 
-def apply_image_overrides(posts, responses=None, download_now=False):
-    """Replace a work's photos with another of the author's posts (or a fixed src). Returns count applied."""
+def apply_image_overrides(posts, responses=None, download_now=False, quiet_missing=False):
+    """Replace a work's photos with another of the author's posts (or a fixed src). Returns count applied.
+
+    A 404 or failed download keeps the files already on disk.
+    """
     ov = load_image_overrides()
     if not ov:
         return 0
@@ -339,7 +507,8 @@ def apply_image_overrides(posts, responses=None, download_now=False):
     applied = 0
     for pid, spec in ov.items():
         if pid not in posts:
-            print(f"image override: work {pid} not in set yet", file=sys.stderr)
+            if not quiet_missing:
+                print(f"image override: work {pid} not in set yet", file=sys.stderr)
             continue
         src_id = str(spec.get("from_post_id") or "")
         media = photos_by_id.get(src_id)
@@ -349,13 +518,24 @@ def apply_image_overrides(posts, responses=None, download_now=False):
             print(f"image override FAILED: no media for {pid} <- {src_id}", file=sys.stderr)
             continue
         already = posts[pid].get("media") == media and posts[pid].get("images")
-        posts[pid]["media"] = media
         if download_now and not already:
+            snapshot = _snapshot_files(posts[pid])
+            previous_media = list(posts[pid].get("media") or [])
+            posts[pid]["media"] = media
             _clear_downloaded(posts[pid])
             download(posts[pid])
-            print("image override applied", pid, "<-", src_id or spec.get("src"))
-        elif not download_now:
-            print("image override media swapped", pid, "<-", src_id or spec.get("src"))
+            if not posts[pid].get("images"):
+                _restore_files(snapshot)
+                posts[pid]["images"] = snapshot["images"]
+                posts[pid]["thumbs"] = snapshot["thumbs"]
+                posts[pid]["media"] = previous_media
+                print(f"image override download failed; kept previous files for {pid}", file=sys.stderr)
+            else:
+                print("image override applied", pid, "<-", src_id or spec.get("src"))
+        else:
+            posts[pid]["media"] = media
+            if not download_now:
+                print("image override media swapped", pid, "<-", src_id or spec.get("src"))
         applied += 1
     return applied
 
@@ -376,8 +556,8 @@ def save(posts, profile=None):
     out = {
         "profile": profile or old.get("profile", {}),
         "last_updated": datetime.now(SHANGHAI).isoformat(timespec="seconds"),
-        # only series that currently have works (e.g. 韩书允/姜宥娜 appear once they have a post with a prompt)
-        "series_order": [s for s in [x[0] for x in SERIES] + [OTHER] if any(s in p["series"] for p in posts.values())],
+        # series tags still present on stored works. Character names are model halls, not theme halls.
+        "series_order": [s for s in [x[0] for x in SERIES] + [OTHER] if any(s in p.get("series") or [] for p in posts.values())],
         "posts": sorted(posts.values(), key=lambda p: int(p["id"]), reverse=True),
     }
     tmp = DATA + ".tmp"

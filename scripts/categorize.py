@@ -192,6 +192,8 @@ def annotate(posts, overrides=None):
     overrides = overrides if overrides is not None else load_overrides()
     uncertain = []
     raw = {}
+    # Model-hall-only and pending-review records stay in posts.json but are not theme halls.
+    items = [p for p in items if p.get("main_hall") is not False]
     for p in items:
         pid = str(p["id"])
         if pid in overrides:

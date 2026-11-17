@@ -1,4 +1,6 @@
-/* HARA · 作品集 — vanilla JS, reads data/posts.json (already filtered by update.py / hidden.json). */
+/* HARA · 作品集 — vanilla JS.
+   Main halls: data/posts.json, minus hidden.json ids and main_hall:false records. Prompts stay in the main lightbox.
+   Model halls: data/models.json allow-list only, images only. */
 (() => {
   "use strict";
   const $ = (s, r = document) => r.querySelector(s);
@@ -142,7 +144,12 @@
     return rows;
   }
 
-  let CFG = null, DATA = null, ALL = [], NO = new Map(), HALLS = [];
+  let CFG = null, DATA = null, MODELS = null, ALL = [], BY_ID = new Map(), NO = new Map(), HALLS = [], MODEL_HALLS = [];
+  const MODEL_DEFS = [
+    { name: "韩书允", label: "韩书允 Han Seoyun", id: "model-seoyun" },
+    { name: "林知夏", label: "林知夏 Lin Zhixia", id: "model-zhixia" },
+    { name: "姜宥娜", label: "姜宥娜 Kang Yuna", id: "model-yuna" },
+  ];
   const SORTS = { new: "最新发布", hot: "最高曝光", likes: "最多点赞", bookmarks: "最多收藏", old: "最早发布" };
   const FEATURED = { new: "最新之作", hot: "镇殿之作", likes: "最多点赞", bookmarks: "最多收藏", old: "最早之作" };
   const NEVER_CAT = new Set(["其他", "偏殿", "韩书允", "林知夏", "姜宥娜"]);
@@ -196,6 +203,71 @@
     });
     archiveSort = keep;
     HALLS = halls;
+  }
+
+  function modelSlides(posts) {
+    const slides = [];
+    posts.forEach((p) => {
+      (p.images || []).forEach((src, k) => {
+        const media = (p.media && p.media[k]) || {};
+        slides.push({
+          id: p.id + ":" + k,
+          postId: p.id,
+          images: [src],
+          thumbs: [(p.thumbs && p.thumbs[k]) || src],
+          media: [media],
+          prompt: "",
+          caption: "",
+          series: [],
+          metrics: {},
+          created_at: p.created_at,
+          url: "",
+        });
+      });
+    });
+    return slides;
+  }
+  function buildModelHalls() {
+    const pending = new Set((MODELS && MODELS.pending_review || []).map(String));
+    const assigned = (MODELS && MODELS.assignments) || {};
+    MODEL_HALLS = MODEL_DEFS.map((def) => {
+      const posts = Object.keys(assigned)
+        .filter((id) => !pending.has(String(id)) && (assigned[id] || []).includes(def.name))
+        .map((id) => BY_ID.get(String(id)))
+        .filter((p) => p && p.images && p.images.length)
+        .sort((a, b) => String(b.id).localeCompare(String(a.id), "en", { numeric: true }));
+      const view = modelSlides(posts);
+      return { ...def, posts, view, images: view.length };
+    });
+  }
+  function renderModelNav() {
+    const nav = $("#modelNav");
+    if (!nav) return;
+    nav.innerHTML = MODEL_HALLS.map((h) => `<a href="#${h.id}">${esc(h.label)} <span>${h.images} 张</span></a>`).join("");
+  }
+  function renderModelHalls() {
+    const root = $("#modelHalls");
+    if (!root) return;
+    root.innerHTML = MODEL_HALLS.map((h) => {
+      const body = h.view.length
+        ? `<div class="gallery">${(() => { return rowsOf(h.view).map((row) => `<div class="g-row r${row.length}">${row.map((slide) => {
+            const i = h.view.indexOf(slide);
+            const m = slide.media[0] || {};
+            const dim = m.w && m.h ? ` width="${m.w}" height="${m.h}"` : "";
+            const img = `<img src="${esc(slide.thumbs[0])}" alt="${esc(h.label)}" loading="lazy" decoding="async"${dim}>`;
+            const plaque = `<span class="plaque"><span class="work-no">${i + 1}</span></span>`;
+            return `<button type="button" class="work rv model-shot" data-i="${i}" aria-label="${esc(h.label)} 图片 ${i + 1}">${relic(img, { plaque })}</button>`;
+          }).join("")}</div>`).join(""); })()}</div>`
+        : `<p class="empty model-empty">这座专区暂时没有已确认身份的已发布图片。</p>`;
+      return `<section class="hall model-hall" id="${h.id}" data-model="${esc(h.name)}" aria-labelledby="${h.id}-t">
+        <header class="hall-head">
+          <p class="hall-kicker">Model · 模特专区</p>
+          <h2 class="hall-title" id="${h.id}-t">${esc(h.label)}</h2>
+          <p class="hall-count">${h.posts.length} 帖 · ${h.images} 张</p>
+        </header>
+        ${body}
+      </section>`;
+    }).join("");
   }
 
   const workHTML = (p, i, cls = "") => {
@@ -306,10 +378,12 @@
     const nav = $("#railNav"); if (!nav) return;
     const allOn = isFlat() && !flatFilter;
     nav.innerHTML = (isFlat() ? `<a href="#flat" class="rail-all${allOn ? " on" : ""}" data-rail="*">全部<span>${ALL.length}</span></a>` : "")
-      + HALLS.map((h) => `<a href="#${h.id}" data-rail="${esc(h.name)}" class="${isFlat() && flatFilter === h.name ? "on" : ""}"><em>${h.roman}</em><b>${esc(h.name)}</b><i>${esc(h.en)}</i><span>${h.posts.length}</span></a>`).join("");
+      + HALLS.map((h) => `<a href="#${h.id}" data-rail="${esc(h.name)}" class="${isFlat() && flatFilter === h.name ? "on" : ""}"><em>${h.roman}</em><b>${esc(h.name)}</b><i>${esc(h.en)}</i><span>${h.posts.length}</span></a>`).join("")
+      + `<p class="rail-kicker">模特专区</p>`
+      + MODEL_HALLS.map((h) => `<a class="rail-model" href="#${h.id}" data-model="${esc(h.name)}">${esc(h.label)} <span>${h.images}</span></a>`).join("");
   }
   function setRailCurrent(id) {
-    document.querySelectorAll("#railNav a[href^='#hall']").forEach((a) => a.classList.toggle("current", a.getAttribute("href") === "#" + id));
+    document.querySelectorAll("#railNav a[href^='#hall'], #railNav a.rail-model").forEach((a) => a.classList.toggle("current", a.getAttribute("href") === "#" + id));
   }
   function renderFlat() {
     const list = sortPosts(ALL.filter((p) => !flatFilter || p.category === flatFilter));
@@ -408,30 +482,50 @@
 
   // ---------- viewer
   const lb = $("#lb");
-  function openViewer(list, i, k = 0, label = "", from = null) {
+  function openViewer(list, i, k = 0, label = "", from = null, imagesOnly = false) {
     if (!list[i]) return;
-    ctx = { list, label }; lastFocus = from || document.activeElement;
+    ctx = { list, label, imagesOnly: !!imagesOnly }; lastFocus = from || document.activeElement;
     const wasOpen = !lb.hidden;
+    lb.classList.toggle("images-only", !!imagesOnly);
+    $("#vPanel").hidden = !!imagesOnly;
     lb.hidden = false; if (!wasOpen) { lock(); lb.classList.remove("opening"); void lb.offsetWidth; if (!reduced) lb.classList.add("opening"); }
     show(i, k, 0);
     if (!wasOpen) setTimeout(() => $("#lbClose").focus({ preventScroll: true }), 30);
   }
   function show(i, k, dir) {
     cur = i; img = k; const p = ctx.list[i];
-    $("#vNo").textContent = "Nº " + pad3(NO.get(p.id));
+    const imagesOnly = !!ctx.imagesOnly;
+    lb.classList.toggle("images-only", imagesOnly);
+    $("#vPanel").hidden = imagesOnly;
+    $("#vNo").textContent = imagesOnly ? String(i + 1) : "Nº " + pad3(NO.get(p.id));
     $("#vPos").textContent = `${i + 1} / ${ctx.list.length}`;
-    $("#vHall").textContent = ctx.label;
+    $("#vHall").textContent = ctx.label || "";
+    if (imagesOnly) {
+      $("#lbDate").textContent = "";
+      $("#lbCaption").textContent = "";
+      const vc = $("#vCaption"); vc.textContent = ""; vc.hidden = true;
+      $("#lbTags").innerHTML = "";
+      $("#lbMetrics").innerHTML = "";
+      $("#lbPrompt").innerHTML = ""; $("#lbPrompt").classList.remove("sel");
+      $("#lbPromptWrap").hidden = true;
+      const link = $("#lbLink"); link.hidden = true; link.removeAttribute("href");
+      const section = MODEL_HALLS.find((h) => h.label === ctx.label);
+      history.replaceState(null, "", section ? "#" + section.id : location.pathname + location.search);
+      const panel = $("#vPanel"); panel.scrollTop = 0;
+      showImg(dir);
+      return;
+    }
     $("#lbDate").textContent = fmtDate(p.created_at, true) + "（上海时间）";
     $("#lbCaption").textContent = titleOf(p);
     const fullCap = captionText(p); const vc = $("#vCaption");
     vc.textContent = fullCap; vc.hidden = !fullCap || fullCap.replace(/\s+/g, "") === titleOf(p).replace(/\s+/g, "");
-    $("#lbTags").innerHTML = p.series.map((s) => `<span>${esc(s)}</span>`).join("");
-    const M = p.metrics;
+    $("#lbTags").innerHTML = (p.series || []).map((s) => `<span>${esc(s)}</span>`).join("");
+    const M = p.metrics || {};
     $("#lbMetrics").innerHTML = [["曝光", M.impressions], ["点赞", M.likes], ["收藏", M.bookmarks]].map(([l, v]) => `<div><b>${fmt(v)}</b>${l}</div>`).join("");
     $("#lbPrompt").innerHTML = promptHTML(p.prompt || ""); $("#lbPrompt").classList.remove("sel");
     $("#lbPromptWrap").hidden = !p.prompt;
     resetCopy();
-    $("#lbLink").href = p.url;
+    const link = $("#lbLink"); link.hidden = false; link.href = p.url;
     history.replaceState(null, "", "#p=" + p.id);
     const panel = $("#vPanel"); panel.scrollTop = 0;
     if (!reduced && dir) [...panel.children].forEach((c) => { c.style.animation = "none"; void c.offsetWidth; c.style.animation = ""; });
@@ -457,7 +551,7 @@
         requestAnimationFrame(fitLb);
       };
       el.onerror = () => { el.classList.remove("loading", "out"); if (well) well.classList.add("is-broken"); };
-      el.src = src; el.alt = titleOf(p);
+      el.src = src; el.alt = ctx.imagesOnly ? (ctx.label || "") : titleOf(p);
       if (el.complete && el.naturalWidth) { el.classList.remove("loading"); fitLb(); }
     };
     lb.style.setProperty("--dir", dir < 0 ? -1 : 1);
@@ -474,7 +568,7 @@
   }
   function closeViewer() {
     if (lb.hidden) return;
-    lb.hidden = true; cur = -1; unlock();
+    lb.hidden = true; lb.classList.remove("images-only"); $("#vPanel").hidden = false; cur = -1; unlock();
     history.replaceState(null, "", location.pathname + location.search);
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
   }
@@ -597,11 +691,15 @@
     const listFor = (el) => {
       if (isFlat() || el.closest("#flat")) {
         const label = "全部 · " + (SORTS[siteSort] || "") + (flatFilter ? " · " + flatFilter : "");
-        return [flatView, label];
+        return [flatView, label, false];
       }
       const hall = el.closest(".hall");
-      if (hall) { const h = HALLS[+hall.dataset.h]; return [h.posts, `Hall ${h.roman} · ${h.name}`]; }
-      return [ALL, "作品"];
+      if (hall && hall.classList.contains("model-hall")) {
+        const h = MODEL_HALLS.find((x) => x.id === hall.id);
+        return [h ? h.view : [], h ? h.label : "", true];
+      }
+      if (hall) { const h = HALLS[+hall.dataset.h]; return [h.posts, `Hall ${h.roman} · ${h.name}`, false]; }
+      return [ALL, "作品", false];
     };
     const rail = $("#rail"), mask = $("#railMask"), railOpen = $("#railOpen"), tocBtn = $("#tocBtn");
     const railOpenState = () => document.body.classList.contains("is-rail");
@@ -620,9 +718,16 @@
       if (home) goHome(e);
     });
     if (rail) rail.addEventListener("click", (e) => {
-      const a = e.target.closest("a[data-rail]");
+      const a = e.target.closest("a[data-rail], a[data-model]");
       if (!a) {
         if (e.target.closest(".rail-home")) setRailOpen(false);
+        return;
+      }
+      if (a.dataset.model) {
+        e.preventDefault();
+        setRailOpen(false);
+        const target = document.querySelector(a.getAttribute("href"));
+        if (target) target.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
         return;
       }
       if (isFlat()) {
@@ -640,7 +745,7 @@
     });
     document.addEventListener("click", (e) => {
       const w = e.target.closest(".work, .colossus-frame");
-      if (w) { const [list, label] = listFor(w); openViewer(list, +w.dataset.i, 0, label, w); return; }
+      if (w) { const [list, label, imagesOnly] = listFor(w); openViewer(list, +w.dataset.i, 0, label, w, imagesOnly); return; }
     });
     const sorterBtn = $("#sorterBtn"), sorterMenu = $("#sorterMenu");
     sorterBtn.addEventListener("click", (e) => {
@@ -705,11 +810,18 @@
 
   const cfgP = fetch("site.config.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).catch(() => null)
     .then((c) => { CFG = c && typeof c === "object" ? c : null; gate(CFG); return CFG; });
-  Promise.all([cfgP, fetch("data/posts.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("posts.json " + r.status); return r.json(); })]).then(([, d]) => {
+  const postsP = fetch("data/posts.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("posts.json " + r.status); return r.json(); });
+  const modelsP = fetch("data/models.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).catch(() => null);
+  const hiddenP = fetch("data/hidden.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : { ids: [] }).catch(() => ({ ids: [] }));
+  Promise.all([cfgP, postsP, modelsP, hiddenP]).then(([, d, models, hiddenDoc]) => {
     DATA = d;
-    ALL = (d.posts || []).filter((p) => p && p.id && p.images && p.images.length).map((p) => ({ ...p, series: p.series || [], metrics: p.metrics || {} })).sort(newest);
+    MODELS = models || {};
+    const hidden = new Set(((hiddenDoc && hiddenDoc.ids) || []).map(String));
+    const posts = (d.posts || []).filter((p) => p && p.id && p.images && p.images.length).map((p) => ({ ...p, series: p.series || [], metrics: p.metrics || {} })).sort(newest);
+    BY_ID = new Map(posts.map((p) => [String(p.id), p]));
+    ALL = posts.filter((p) => p.main_hall !== false && !hidden.has(String(p.id)));
     ALL.slice().reverse().forEach((p, i) => NO.set(p.id, i + 1));
-    buildHalls(); renderProfile(); renderCover(); renderAtrium(); renderHalls(); syncSortUI(); bind();
+    buildHalls(); buildModelHalls(); renderProfile(); renderCover(); renderAtrium(); renderHalls(); renderModelNav(); renderModelHalls(); syncSortUI(); bind();
     observe(document); motion();
     const m = location.hash.match(/p=(\d+)/);
     if (m) {
@@ -717,6 +829,6 @@
       const list = hall ? hall.posts : ALL;
       const i = list.findIndex((p) => p.id === m[1]);
       if (i >= 0) openViewer(list, i, 0, hall ? `Hall ${hall.roman} · ${hall.name}` : "作品");
-    } else if (/^#hall-\d+$/.test(location.hash)) { const t = $(location.hash); if (t) t.scrollIntoView(); }
+    } else if (/^#hall-\d+$/.test(location.hash) || /^#model-[\w-]+$/.test(location.hash)) { const t = $(location.hash); if (t) t.scrollIntoView(); }
   }).catch((e) => { console.error(e); $("#empty").hidden = false; $("#empty").textContent = "作品数据加载失败，请稍后刷新。"; });
 })();

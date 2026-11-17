@@ -1,5 +1,5 @@
 {
- "_note": "ids: never show. include_ids: show even though no prompt was auto-detected (use after manual check). Then run: python3 scripts/update.py --reclassify",
+ "_note": "ids: hide from the main halls only. Do not delete the post, its images, its prompt, or a model mapping. include_ids: show in the main halls even if no prompt was auto-detected. Model halls follow data/models.json. Then run: python3 scripts/update.py --reclassify",
  "ids": [
   "2118973582579740805",
   "2112876812292567486",

@@ -17,3 +17,5 @@ scripts/__pycache__/
 .git-credentials
 # local backup of the previous frontend (never publish)
 _old_frontend/
+# retention backups (also written outside the repo; never publish)
+backups/
