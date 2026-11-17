@@ -340,7 +340,7 @@
     const target = $("#flat");
     if (target) target.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
   }
-  function leaveFlat() {
+  function leaveFlat(opts) {
     siteSort = null;
     flatFilter = null;
     archiveSort = "hot";
@@ -353,11 +353,26 @@
     syncSortUI();
     closeSorter();
     renderRail();
-    // halls still in 最高曝光 order from build; just re-observe
     observe($("#halls"));
     observe($("#arches"));
+    if (opts && opts.home) return;
     const t = $("#atrium");
     if (t) t.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  }
+  function goHome(e) {
+    if (e) e.preventDefault();
+    const viewer = $("#lb");
+    if (viewer && !viewer.hidden) closeViewer();
+    closeSorter();
+    document.body.classList.remove("is-rail");
+    const railOpen = $("#railOpen"), toc = $("#tocBtn"), mask = $("#railMask");
+    if (railOpen) railOpen.setAttribute("aria-expanded", "false");
+    if (toc) toc.setAttribute("aria-expanded", "false");
+    if (mask) mask.hidden = true;
+    if (isFlat()) leaveFlat({ home: true });
+    const scroller = document.querySelector("main");
+    if (scroller) scroller.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
+    if (location.hash) history.replaceState(null, "", location.pathname + location.search);
   }
   function syncSortUI() {
     const now = $("#sorterNow");
@@ -623,6 +638,10 @@
     if (railOpen) railOpen.addEventListener("click", (e) => { e.stopPropagation(); toggleRail(); });
     if (tocBtn) tocBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleRail(); });
     if (mask) mask.addEventListener("click", () => setRailOpen(false));
+    document.addEventListener("click", (e) => {
+      const home = e.target.closest("a.rail-home, a.bar-mark, a[href='#top']");
+      if (home) goHome(e);
+    });
     if (rail) rail.addEventListener("click", (e) => {
       const a = e.target.closest("a[data-rail]");
       if (!a) {
