@@ -80,6 +80,49 @@
   /* title:end */
   const thumbOf = (p, k = 0) => (p.thumbs && p.thumbs[k]) || p.images[k];
   const newest = (a, b) => b.id.localeCompare(a.id, "en", { numeric: true });
+  const dims = (p, k = 0) => {
+    const m = (p.media && p.media[k]) || {};
+    const w = +m.w || 0, h = +m.h || 0;
+    return w > 0 && h > 0 ? ` width="${w}" height="${h}"` : "";
+  };
+  /* Ornamental frame sits in the relic's padding. Ordinal plaque and count are siblings of the image, never inside it. */
+  function relic(img, { plaque = "", tab = "", cls = "" } = {}) {
+    return `<span class="relic${cls ? " " + cls : ""}"><span class="edge n" aria-hidden="true"></span><span class="edge e" aria-hidden="true"></span><span class="edge s" aria-hidden="true"></span><span class="edge w" aria-hidden="true"></span><span class="well">${img}</span>${tab}${plaque}</span>`;
+  }
+  function framePad(el) {
+    if (!el) return 48;
+    const s = getComputedStyle(el);
+    const band = parseFloat(s.getPropertyValue("--band")) || 14;
+    const recess = parseFloat(s.getPropertyValue("--recess")) || 9;
+    return (band + recess) * 2 + 2;
+  }
+  function viewportFit(img, maxW, maxH) {
+    const nw = img.naturalWidth || +img.getAttribute("width") || 0;
+    const nh = img.naturalHeight || +img.getAttribute("height") || 0;
+    if (nw < 2 || nh < 2 || maxW < 8 || maxH < 8) return;
+    const s = Math.min(maxW / nw, maxH / nh);
+    img.style.width = Math.max(1, Math.round(nw * s)) + "px";
+    img.style.height = Math.max(1, Math.round(nh * s)) + "px";
+  }
+  function fitCover() {
+    const img = $("#coverImg"), stage = document.querySelector(".cover-stage");
+    if (!img || !stage) return;
+    const r = stage.getBoundingClientRect();
+    const pad = framePad(img.closest(".relic"));
+    viewportFit(img, Math.max(64, r.width - pad - 8), Math.max(64, r.height - pad - 4));
+  }
+  function fitLb() {
+    const img = $("#lbImg"), stage = $("#lbStage");
+    if (!img || !stage || lb.hidden) return;
+    const r = stage.getBoundingClientRect();
+    const prev = $("#lbPrev").getBoundingClientRect();
+    const next = $("#lbNext").getBoundingClientRect();
+    const dots = $("#lbDots");
+    const dotsH = dots && dots.children.length ? Math.max(44, dots.getBoundingClientRect().height) : 0;
+    const pad = framePad(img.closest(".relic"));
+    const gutter = Math.max(44, prev.width) + Math.max(44, next.width) + 20;
+    viewportFit(img, Math.max(64, r.width - gutter - pad), Math.max(64, r.height - dotsH - pad - 12));
+  }
 
   // hall vocabulary
   const CHARACTERS = ["韩书允", "林知夏", "姜宥娜"];
@@ -156,11 +199,13 @@
   }
 
   const workHTML = (p, i, cls = "") => {
-    const t = esc(titleOf(p)); const n = p.images.length;
-    return `<button type="button" class="work rv ${cls}" data-id="${p.id}" data-i="${i}" aria-label="${t}">
-      <img src="${esc(thumbOf(p))}" alt="${t}" loading="lazy" decoding="async" width="720" height="900">
-      ${n > 1 ? `<span class="work-multi">${n} 张</span>` : ""}
-      <span class="work-meta"><span class="work-no">Nº ${pad3(NO.get(p.id))}</span><span class="work-title">${t}</span></span></button>`;
+    const t = esc(titleOf(p)); const n = p.images.length; const no = pad3(NO.get(p.id));
+    const img = `<img src="${esc(thumbOf(p))}" alt="${t}" loading="lazy" decoding="async"${dims(p)}>`;
+    const tab = n > 1 ? `<span class="tab-count">${n} 张</span>` : "";
+    const plaque = `<span class="plaque"><span class="work-no">Nº ${no}</span></span>`;
+    return `<button type="button" class="work rv ${cls}" data-id="${p.id}" data-i="${i}" aria-label="Nº ${no} ${t}">
+      ${relic(img, { tab, plaque })}
+      <span class="work-title">${t}</span></button>`;
   };
 
   function renderCover() {
@@ -173,7 +218,13 @@
     const hero = pinned || (modest.length ? modest : recent.length ? recent : ALL).slice().sort(byViews)[0];
     document.documentElement.dataset.cover = hero ? hero.id : "";
     if (!hero) return;
-    const im = $("#coverImg"); im.src = hero.images[0]; im.alt = titleOf(hero);
+    const im = $("#coverImg");
+    const m = (hero.media && hero.media[0]) || {};
+    if (m.w && m.h) { im.width = m.w; im.height = m.h; }
+    im.onload = fitCover;
+    im.src = hero.images[0]; im.alt = titleOf(hero);
+    if (im.complete) fitCover();
+    requestAnimationFrame(() => requestAnimationFrame(fitCover));
     $("#coverBtn").onclick = () => {
       const hall = HALLS.find((h) => h.posts.some((q) => q.id === hero.id));
       const list = hall ? hall.posts : ALL;
@@ -183,10 +234,14 @@
 
   function renderProfile() {
     const P = DATA.profile || {};
-    if (P.name) $("#name").textContent = P.name;
-    if (P.bio) $("#bio").textContent = P.bio;
-    if (P.avatar) $("#avatar").src = P.avatar;
-    if (P.username) { $("#handle").textContent = "@" + P.username; $("#handle").href = P.url || "https://x.com/" + P.username; }
+    if (P.name) { $("#name").textContent = P.name; const ln = $("#letterName"); if (ln) ln.textContent = P.name; }
+    if (P.bio) { const b = $("#bio"); if (b) b.textContent = P.bio; }
+    if (P.avatar) { $("#avatar").src = P.avatar; const la = $("#letterAvatar"); if (la) la.src = P.avatar; }
+    if (P.username) {
+      const href = P.url || "https://x.com/" + P.username;
+      $("#handle").textContent = "@" + P.username; $("#handle").href = href;
+      const lh = $("#letterHandle"); if (lh) { lh.textContent = "@" + P.username; lh.href = href; }
+    }
     const imgs = ALL.reduce((s, p) => s + p.images.length, 0);
     $("#stats").innerHTML = [["作品", ALL.length], ["图片", imgs], ["关注者", P.followers]]
       .filter(([, v]) => v != null).map(([l, v]) => `<div><b>${fmt(v)}</b>${l}</div>`).join("");
@@ -195,9 +250,13 @@
   }
 
   function renderAtrium() {
-    $("#arches").innerHTML = HALLS.map((h) => `<a class="arch rv" href="#${h.id}">
-      <span class="arch-door"><span class="arch-r">${h.roman}</span><img src="${esc(thumbOf(h.posts[0]))}" alt="" loading="lazy" decoding="async"></span>
-      <span class="arch-name">${esc(h.name)}</span><span class="arch-en">${esc(h.en)}</span><span class="arch-c">${h.posts.length} WORKS</span></a>`).join("");
+    $("#arches").innerHTML = HALLS.map((h) => {
+      const img = `<img src="${esc(thumbOf(h.posts[0]))}" alt="" loading="lazy" decoding="async"${dims(h.posts[0])}>`;
+      const plaque = `<span class="plaque"><span class="arch-r">${h.roman}</span></span>`;
+      return `<a class="arch rv" href="#${h.id}">
+        ${relic(img, { plaque, cls: "relic-arch" })}
+        <span class="arch-name">${esc(h.name)}</span><span class="arch-en">${esc(h.en)}</span><span class="arch-c">${h.posts.length} 件</span></a>`;
+    }).join("");
     renderRail();
   }
 
@@ -216,10 +275,20 @@
         </header>
         <div class="colossus">
           <p class="side-note l rv"><b>${fmt(imps)}</b>本殿累计曝光</p>
-          <button type="button" class="colossus-frame" data-id="${top.id}" data-i="0" aria-label="${esc(titleOf(top))}">
-            <img src="${esc(top.images[0])}" alt="${esc(titleOf(top))}" loading="lazy" decoding="async">
-            <span class="plaque"><em>${FEATURED[archiveSort] || "镇殿之作"} · Nº ${pad3(NO.get(top.id))}</em><b>${esc(titleOf(top))}</b><span>${fmtDate(top.created_at)} · 曝光 ${fmt(top.metrics.impressions)}</span></span>
-          </button>
+          <div class="colossus-core">
+            <button type="button" class="colossus-frame" data-id="${top.id}" data-i="0" aria-label="Nº ${pad3(NO.get(top.id))} ${esc(titleOf(top))}">
+              ${relic(`<img src="${esc(top.images[0])}" alt="${esc(titleOf(top))}" loading="lazy" decoding="async"${dims(top)}>`, {
+                cls: "relic-hero",
+                tab: top.images.length > 1 ? `<span class="tab-count">${top.images.length} 张</span>` : "",
+                plaque: `<span class="plaque"><span class="work-no">Nº ${pad3(NO.get(top.id))}</span></span>`
+              })}
+              <span class="hero-cap">
+                <span class="hero-kicker">${esc(FEATURED[archiveSort] || "镇殿之作")}</span>
+                <span class="hero-title">${esc(titleOf(top))}</span>
+                <span class="hero-meta">${fmtDate(top.created_at)} · 曝光 ${fmt(top.metrics.impressions)}</span>
+              </span>
+            </button>
+          </div>
           <p class="side-note r rv"><b>${fmt(likes)}</b>本殿累计点赞</p>
         </div>
         ${rest.length ? `<div class="gallery">${(() => { let k = 0; return rowsOf(rest).map((row) => `<div class="g-row r${row.length}">${row.map((p) => workHTML(p, ++k)).join("")}</div>`).join(""); })()}</div>` : ""}
@@ -361,13 +430,19 @@
     const swap = () => {
       if (tok !== navToken) return;
       el.classList.add("loading");
+      const well = el.closest(".well"); if (well) well.classList.remove("is-broken");
+      const media = (p.media && p.media[img]) || {};
+      if (media.w && media.h) { el.width = media.w; el.height = media.h; }
       el.onload = () => {
         if (tok !== navToken) return;
         el.classList.remove("loading");
+        fitLb();
         if (dir && !reduced) { el.classList.add("pre"); void el.offsetWidth; el.classList.remove("pre", "out"); } else el.classList.remove("out");
+        requestAnimationFrame(fitLb);
       };
-      el.onerror = () => { el.classList.remove("loading", "out"); };
+      el.onerror = () => { el.classList.remove("loading", "out"); if (well) well.classList.add("is-broken"); };
       el.src = src; el.alt = titleOf(p);
+      if (el.complete && el.naturalWidth) { el.classList.remove("loading"); fitLb(); }
     };
     lb.style.setProperty("--dir", dir < 0 ? -1 : 1);
     if (dir && !reduced && el.getAttribute("src")) { el.classList.add("out"); setTimeout(swap, 260); } else swap();
@@ -430,7 +505,7 @@
     setTimeout(() => $("#gateYes").focus(), 50);
     $("#gateYes").onclick = () => {
       if (reduced) { g.hidden = true; unlock(); return; }
-      g.classList.add("opening"); setTimeout(() => { g.hidden = true; unlock(); }, 1500);
+      g.classList.add("opening"); setTimeout(() => { g.hidden = true; unlock(); }, 740);
     };
   }
 
@@ -441,15 +516,6 @@
     if (reduced || !("IntersectionObserver" in window)) { els.forEach((e) => e.classList.add("in")); return; }
     if (!io) io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -6% 0px", threshold: .08 });
     els.forEach((e) => io.observe(e));
-  }
-  const live = new Set();
-  let colio;
-  function watchColossus() {
-    live.clear();
-    if (reduced || !("IntersectionObserver" in window)) return;
-    if (colio) colio.disconnect();
-    colio = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting ? live.add(e.target) : live.delete(e.target)), { rootMargin: "20% 0px" });
-    document.querySelectorAll(".colossus-frame").forEach((f) => colio.observe(f));
   }
   function watchSorter() {
     const cover = $("#cover"), el = $("#sorter");
@@ -506,8 +572,7 @@
     else if (mq.addListener) mq.addListener(onResize);
   }
   function motion() {
-    const bar = $("#bar"), cover = $("#cover"), fig = $("#coverFigure");
-    watchColossus();
+    const bar = $("#bar"), cover = $("#cover");
     watchSorter();
     let ticking = false;
     const updateRailCurrent = () => {
@@ -526,17 +591,37 @@
     };
     const frame = () => {
       ticking = false;
-      const y = scrollY, vh = innerHeight;
+      const y = scrollY;
       bar.classList.toggle("on", y > cover.offsetHeight * .72);
       document.body.classList.toggle("past-cover", y > cover.offsetHeight * .72);
       updateRailCurrent();
-      if (reduced) return;
-      if (y < vh * 1.2) fig.style.setProperty("--cy", (y * .28).toFixed(1) + "px");
-      live.forEach((f) => { const r = f.getBoundingClientRect(); const p = Math.min(1, Math.max(0, (vh - r.top) / (vh + r.height))); f.style.setProperty("--p", p.toFixed(4)); });
     };
     addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(frame); } }, { passive: true });
-    addEventListener("resize", frame);
+    addEventListener("resize", () => { fitCover(); fitLb(); frame(); });
     frame();
+  }
+
+  // Fine-pointer ring only. Native cursor stays; the node never receives hits.
+  function mountNeedle() {
+    if (reduced) return;
+    const fine = matchMedia("(hover: hover) and (pointer: fine)");
+    if (!fine.matches) return;
+    const n = document.createElement("div");
+    n.className = "needle";
+    n.setAttribute("aria-hidden", "true");
+    document.body.appendChild(n);
+    let raf = 0, x = 0, y = 0;
+    const paint = () => { raf = 0; n.style.transform = `translate3d(${x}px,${y}px,0)`; };
+    const hide = () => n.classList.remove("on");
+    const allowed = (e) => fine.matches && (!e.pointerType || e.pointerType === "mouse" || e.pointerType === "pen");
+    addEventListener("pointermove", (e) => {
+      if (!allowed(e)) { hide(); return; }
+      x = e.clientX; y = e.clientY; n.classList.add("on");
+      if (!raf) raf = requestAnimationFrame(paint);
+    }, { passive: true });
+    addEventListener("pointerdown", (e) => { if (!allowed(e)) hide(); }, { passive: true });
+    addEventListener("pointerout", (e) => { if (!e.relatedTarget) hide(); });
+    addEventListener("blur", hide);
   }
 
   // ---------- events
@@ -610,11 +695,38 @@
     $("#lbClose").onclick = closeViewer; $("#lbPrev").onclick = () => step(-1); $("#lbNext").onclick = () => step(1);
     $("#lbCopy").onclick = copyPrompt;
     $("#lbDots").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { const k = +b.dataset.k; const d = k > img ? 1 : -1; img = k; showImg(d); } });
-    $("#lbStage").addEventListener("click", (e) => { if (e.target === e.currentTarget || e.target.id === "vFigure") closeViewer(); });
+    $("#lbStage").addEventListener("click", (e) => {
+      if (e.target.closest(".relic, .v-nav, .v-dots")) return;
+      closeViewer();
+    });
+    const focusables = (root) => [...root.querySelectorAll("a[href], button, input, textarea, select")].filter((n) => !n.disabled && n.getClientRects().length);
+    addEventListener("keydown", (e) => {
+      if (e.key !== "Tab") return;
+      const g = $("#gate");
+      const root = g && !g.hidden ? g : !lb.hidden ? lb : null;
+      if (!root) return;
+      const nodes = focusables(root);
+      if (!nodes.length) return;
+      const first = nodes[0], last = nodes[nodes.length - 1];
+      if (!root.contains(document.activeElement)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+        return;
+      }
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
     addEventListener("keydown", (e) => {
       if (lb.hidden) return;
       if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowRight") { e.preventDefault(); step(1); } else if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
     });
+    document.addEventListener("error", (ev) => {
+      const t = ev.target;
+      if (!t || t.tagName !== "IMG") return;
+      const well = t.closest(".well");
+      if (well) well.classList.add("is-broken");
+    }, true);
+    mountNeedle();
     let sx = null, sy = null;
     const st = $("#lbStage");
     st.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
