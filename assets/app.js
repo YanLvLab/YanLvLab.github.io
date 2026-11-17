@@ -587,29 +587,6 @@
     frame();
   }
 
-  // Fine-pointer ring only. Native cursor stays; the node never receives hits.
-  function mountNeedle() {
-    if (reduced) return;
-    const fine = matchMedia("(hover: hover) and (pointer: fine)");
-    if (!fine.matches) return;
-    const n = document.createElement("div");
-    n.className = "needle";
-    n.setAttribute("aria-hidden", "true");
-    document.body.appendChild(n);
-    let raf = 0, x = 0, y = 0;
-    const paint = () => { raf = 0; n.style.transform = `translate3d(${x}px,${y}px,0)`; };
-    const hide = () => n.classList.remove("on");
-    const allowed = (e) => fine.matches && (!e.pointerType || e.pointerType === "mouse" || e.pointerType === "pen");
-    addEventListener("pointermove", (e) => {
-      if (!allowed(e)) { hide(); return; }
-      x = e.clientX; y = e.clientY; n.classList.add("on");
-      if (!raf) raf = requestAnimationFrame(paint);
-    }, { passive: true });
-    addEventListener("pointerdown", (e) => { if (!allowed(e)) hide(); }, { passive: true });
-    addEventListener("pointerout", (e) => { if (!e.relatedTarget) hide(); });
-    addEventListener("blur", hide);
-  }
-
   // ---------- events
   function bind() {
     const ar = $("#arches"), ap = $("#archPrev"), an = $("#archNext");
@@ -717,7 +694,6 @@
       const well = t.closest(".well");
       if (well) well.classList.add("is-broken");
     }, true);
-    mountNeedle();
     let sx = null, sy = null;
     const st = $("#lbStage");
     st.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
