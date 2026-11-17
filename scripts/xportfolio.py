@@ -165,14 +165,27 @@ def classify(caption, prompt=""):
     return [l for _, _, l in sorted(scored)] or [OTHER]
 
 
+# One picture that names every model at once is not a portrait of any of them.
+AMBIGUOUS_MODEL_IDS = {"2117870734303531012"}
+
+
 def model_names(post):
     """Character labels already stored, plus names written in the author's own caption, prompt, or post text.
 
-    A name is never assigned by looking at a picture. Stored labels are kept even if a later fetch omits them."""
-    prev = [m for m in (post.get("models") or []) if m in CHARACTERS]
+    A name is never assigned by looking at a picture. Stored labels are kept even if a later fetch omits them.
+    If the text names all three models, nothing is assigned."""
+    if str(post.get("id") or "") in AMBIGUOUS_MODEL_IDS:
+        return []
+    prev = []
+    for raw in post.get("models") or []:
+        label = raw.get("zh") if isinstance(raw, dict) else raw
+        if label in CHARACTERS and label not in prev:
+            prev.append(label)
     blob_cap = "\n".join([post.get("caption") or "", post.get("text") or ""])
     blob_prompt = "\n".join([post.get("prompt") or ""] + list(post.get("thread") or []))
     detected = [s for s in classify(blob_cap, blob_prompt) if s in CHARACTERS]
+    if set(detected) >= CHARACTERS:
+        return []
     out = []
     for m in prev + detected:
         if m not in out:

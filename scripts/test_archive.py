@@ -58,6 +58,12 @@ def test_unnamed_photo_is_not_assigned():
     assert "70" not in feed and "70" not in model_only
 
 
+def test_all_three_names_are_not_assigned():
+    post = {"id": "2117870734303531012", "text": "韩书允 Han Seoyun & 姜宥娜 Kang Yuna & 林知夏 Lin Zhixia",
+            "caption": "", "prompt": "", "thread": []}
+    assert xp.model_names(post) == []
+
+
 def test_missing_source_does_not_drop():
     existing = {"2122359287666065800": {
         "id": "2122359287666065800", "images": ["images/2122359287666065800_1.jpg"],
@@ -90,6 +96,7 @@ if __name__ == "__main__":
     test_third_party_reply_ignored()
     test_named_photo_without_prompt_is_model_only()
     test_unnamed_photo_is_not_assigned()
+    test_all_three_names_are_not_assigned()
     test_missing_source_does_not_drop()
     test_cleanup_keeps_manifest()
     print("archive tests ok")

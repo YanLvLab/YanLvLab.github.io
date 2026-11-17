@@ -209,25 +209,27 @@
     return modelIndex().map((m) => m.zh).filter((zh) => raw.includes(zh));
   };
   const modelPosts = (zh) => ARCHIVE.filter((p) => modelIds(p).includes(zh));
-  const pictureHTML = (p, i) => {
-    const n = p.images.length; const no = pad3(NO.get(p.id));
-    const img = `<img src="${esc(thumbOf(p))}" alt="" loading="lazy" decoding="async"${dims(p)}>`;
-    const tab = n > 1 ? `<span class="tab-count">${n} 张</span>` : "";
-    const plaque = `<span class="plaque"><span class="work-no">Nº ${no}</span></span>`;
-    return `<button type="button" class="work work-picture rv" data-id="${p.id}" data-i="${i}" data-silent="1" aria-label="图片 Nº ${no}">
-      ${relic(img, { tab, plaque })}</button>`;
+  const pictureHTML = (p, i, k) => {
+    const src = (p.thumbs && p.thumbs[k]) || p.images[k];
+    const m = (p.media && p.media[k]) || {};
+    const dim = m.w && m.h ? ` width="${m.w}" height="${m.h}"` : "";
+    const img = `<img src="${esc(src)}" alt="" loading="lazy" decoding="async"${dim}>`;
+    return `<button type="button" class="work work-picture rv" data-id="${p.id}" data-i="${i}" data-k="${k}" data-silent="1" aria-label="图片">
+      ${relic(img)}</button>`;
   };
   function renderModels() {
     const host = $("#modelGalleries"); if (!host) return;
     host.innerHTML = modelIndex().map((m) => {
       const posts = modelPosts(m.zh);
-      const cells = posts.length ? `<div class="model-gallery">${posts.map((p, i) => pictureHTML(p, i)).join("")}</div>`
+      const nImg = posts.reduce((s, p) => s + (p.images || []).length, 0);
+      const tiles = posts.flatMap((p, i) => (p.images || []).map((_, k) => pictureHTML(p, i, k)));
+      const cells = tiles.length ? `<div class="model-gallery">${tiles.join("")}</div>`
         : `<p class="empty">此角色廊还没有已归档的图片。</p>`;
       return `<section class="hall model-hall" id="model-${esc(m.zh)}" data-model="${esc(m.zh)}" aria-labelledby="model-${esc(m.zh)}-t">
         <header class="hall-head">
           <h2 class="hall-title" id="model-${esc(m.zh)}-t">${esc(m.zh)}</h2>
           <p class="hall-en">${esc(m.en)}</p>
-          <p class="hall-count">${posts.length} 张图片</p>
+          <p class="hall-count">${nImg} 张图片</p>
         </header>
         ${cells}
       </section>`;
@@ -340,7 +342,7 @@
   function renderRail() {
     const nav = $("#railNav"); if (!nav) return;
     const allOn = isFlat() && !flatFilter;
-    const modelLinks = modelIndex().map((m) => `<a href="#model-${esc(m.zh)}" data-model="${esc(m.zh)}"><em>M</em><b>${esc(m.zh)}</b><i>${esc(m.en)}</i><span>${modelPosts(m.zh).length}</span></a>`).join("");
+    const modelLinks = modelIndex().map((m) => `<a href="#model-${esc(m.zh)}" data-model="${esc(m.zh)}"><em>M</em><b>${esc(m.zh)}</b><i>${esc(m.en)}</i><span>${modelPosts(m.zh).reduce((s, p) => s + (p.images || []).length, 0)}</span></a>`).join("");
     nav.innerHTML = modelLinks + (isFlat() ? `<a href="#flat" class="rail-all${allOn ? " on" : ""}" data-rail="*">全部<span>${ALL.length}</span></a>` : "")
       + HALLS.map((h) => `<a href="#${h.id}" data-rail="${esc(h.name)}" class="${isFlat() && flatFilter === h.name ? "on" : ""}"><em>${h.roman}</em><b>${esc(h.name)}</b><i>${esc(h.en)}</i><span>${h.posts.length}</span></a>`).join("");
   }
@@ -693,7 +695,7 @@
     });
     document.addEventListener("click", (e) => {
       const w = e.target.closest(".work, .colossus-frame");
-      if (w) { const [list, label] = listFor(w); openViewer(list, +w.dataset.i, 0, label, w, w.dataset.silent === "1"); return; }
+      if (w) { const [list, label] = listFor(w); openViewer(list, +w.dataset.i, +(w.dataset.k || 0), label, w, w.dataset.silent === "1"); return; }
     });
     const sorterBtn = $("#sorterBtn"), sorterMenu = $("#sorterMenu");
     sorterBtn.addEventListener("click", (e) => {

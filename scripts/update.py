@@ -102,6 +102,65 @@ def cleanup_images(posts, img_dir=None, thumb_dir=None, manifest_path=None):
     return removed
 
 
+def _zh_models(raw):
+    out = []
+    for m in raw or []:
+        if isinstance(m, dict):
+            m = m.get("zh")
+        if m in xp.CHARACTERS and m not in out:
+            out.append(m)
+    return out
+
+
+def ingest_prepared(path):
+    """Merge a prepared catalogue slice. Does not copy the slice file into the site."""
+    blob = json.load(open(path, encoding="utf-8"))
+    snapshot_posts()
+    existing, profile = load_existing()
+    fresh = {}
+    for src in blob.get("posts") or []:
+        p = dict(src)
+        p["models"] = xp.model_names(p)
+        p["in_feed"] = True
+        p["series"] = xp.classify(p.get("caption") or "", p.get("prompt") or "")
+        p["images"], p["thumbs"] = [], []
+        fresh[p["id"]] = xp.download(p)
+    for src in blob.get("model_only_posts") or []:
+        p = dict(src)
+        p["id"] = str(p["id"])
+        named = xp.model_names(p) or _zh_models(src.get("models"))
+        if str(p["id"]) in xp.AMBIGUOUS_MODEL_IDS or set(named) >= xp.CHARACTERS:
+            continue
+        p["models"] = named
+        p["in_feed"] = False
+        p["prompt"] = ""
+        p["prompt_source"] = None
+        p["series"] = list(named)
+        p["images"], p["thumbs"] = [], []
+        fresh[p["id"]] = xp.download(p)
+    existing, added, refreshed = xp.merge_archive(existing, fresh)
+    prof = blob.get("profile") or {}
+    if prof:
+        profile = dict(profile)
+        if prof.get("bio"):
+            profile["bio"] = prof["bio"]
+        if prof.get("followers") is not None:
+            profile["followers"] = prof["followers"]
+        if prof.get("name"):
+            profile["name"] = prof["name"]
+        if prof.get("username"):
+            profile["username"] = prof["username"]
+            profile["url"] = prof.get("url") or profile.get("url")
+    out = xp.save(existing, profile)
+    import categorize
+    _, cat_stats, _ = categorize.attach()
+    remember_files({p["id"]: p for p in json.load(open(xp.DATA, encoding="utf-8"))["posts"]})
+    feed = [p for p in out["posts"] if p.get("in_feed") is not False and not p.get("suppressed")]
+    print(json.dumps({"added": added, "refreshed": refreshed, "archived": len(out["posts"]),
+                      "feed": len(feed), "categories": cat_stats["counts"]}, ensure_ascii=False))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", nargs="*", default=[], help="raw X API JSON files: image posts AND self-reply searches")
