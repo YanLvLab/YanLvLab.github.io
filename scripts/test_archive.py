@@ -105,6 +105,39 @@ def test_one_confirmed_image_does_not_label_siblings():
     assert posts["8"]["models"] == ["姜宥娜"]
 
 
+def test_replace_clears_omitted_and_explicit_unassign():
+    posts = {"9": {
+        "id": "9",
+        "images": ["images/9_1.jpg", "images/9_2.jpg", "images/9_3.jpg"],
+        "thumbs": ["images/thumb/9_1.webp", "images/thumb/9_2.webp", "images/thumb/9_3.webp"],
+        "image_models": ["韩书允", "林知夏", "姜宥娜"],
+        "models": ["韩书允", "林知夏", "姜宥娜"],
+        "in_feed": True,
+        "category": "丝袜",
+        "series": ["丝袜"],
+        "prompt": "keep me",
+        "caption": "keep",
+    }}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "map.json")
+        json.dump({
+            "replace": True,
+            "confirmed": [
+                {"post_id": "9", "index": 2, "src": "images/9_2.jpg", "model_zh": "姜宥娜"},
+                {"post_id": "9", "index": 3, "src": "images/WRONG.jpg", "model_zh": "韩书允"},
+            ],
+            "unassigned": [{"post_id": "9", "index": 1, "src": "images/9_1.jpg", "status": "unassigned"}],
+        }, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+        xp.apply_model_media(posts, path)
+    assert posts["9"]["image_models"] == [None, "姜宥娜", None]
+    assert posts["9"]["models"] == ["姜宥娜"]
+    assert posts["9"]["images"] == ["images/9_1.jpg", "images/9_2.jpg", "images/9_3.jpg"]
+    assert posts["9"]["prompt"] == "keep me"
+    assert posts["9"]["category"] == "丝袜"
+    assert posts["9"]["series"] == ["丝袜"]
+    assert posts["9"]["in_feed"] is True
+
+
 def test_cleanup_keeps_manifest(tmp=None):
     with tempfile.TemporaryDirectory() as tmp:
         img = os.path.join(tmp, "images"); thumb = os.path.join(tmp, "thumb"); os.makedirs(img); os.makedirs(thumb)
@@ -126,5 +159,6 @@ if __name__ == "__main__":
     test_all_three_names_are_not_assigned()
     test_missing_source_does_not_drop()
     test_one_confirmed_image_does_not_label_siblings()
+    test_replace_clears_omitted_and_explicit_unassign()
     test_cleanup_keeps_manifest()
     print("archive tests ok")
