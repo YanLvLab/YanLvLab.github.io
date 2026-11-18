@@ -211,23 +211,53 @@ def apply_model_media(posts, path=None):
     data = json.load(open(path, encoding="utf-8"))
     replace = bool(data.get("replace") or data.get("mode") == "replace")
     confirmed, clear, src_of = {}, set(), {}
-    for row in data.get("confirmed") or []:
-        zh = row.get("model_zh")
-        if zh not in CHARACTERS or row.get("post_id") is None or row.get("index") is None:
-            continue
-        key = _media_key(row)
-        confirmed[key] = zh
+
+    def remember_src(key, row):
         if row.get("src"):
             src_of[key] = row["src"]
-    for bucket in ("pending", "unassigned", "removed"):
-        for row in data.get(bucket) or []:
+
+    def one_label(row):
+        found = []
+        raw = row.get("models")
+        items = raw if isinstance(raw, list) else [row.get("model_zh")]
+        for item in items:
+            zh = item.get("zh") if isinstance(item, dict) else item
+            if zh in CHARACTERS and zh not in found:
+                found.append(zh)
+        if len(found) == 1 and (row.get("status") in (None, "", "confirmed")):
+            return found[0]
+        return None
+
+    media = data.get("media")
+    if isinstance(media, list):
+        for row in media:
             if row.get("post_id") is None or row.get("index") is None:
                 continue
             key = _media_key(row)
-            confirmed.pop(key, None)
-            clear.add(key)
-            if row.get("src"):
-                src_of[key] = row["src"]
+            remember_src(key, row)
+            label = one_label(row) if row.get("status") == "confirmed" else None
+            if label:
+                confirmed[key] = label
+            else:
+                clear.add(key)
+    else:
+        for row in data.get("confirmed") or []:
+            if row.get("post_id") is None or row.get("index") is None:
+                continue
+            key = _media_key(row)
+            label = one_label(dict(row, status="confirmed"))
+            if not label:
+                continue
+            confirmed[key] = label
+            remember_src(key, row)
+        for bucket in ("pending", "unassigned", "removed"):
+            for row in data.get(bucket) or []:
+                if row.get("post_id") is None or row.get("index") is None:
+                    continue
+                key = _media_key(row)
+                confirmed.pop(key, None)
+                clear.add(key)
+                remember_src(key, row)
     applied = 0
     for p in posts.values():
         images = list(p.get("images") or [])

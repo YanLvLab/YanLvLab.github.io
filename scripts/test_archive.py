@@ -75,8 +75,9 @@ def test_missing_source_does_not_drop():
     assert "2122359287666065800" in merged
     kept = merged["2122359287666065800"]
     assert kept["prompt"] == "keep me"
-    assert kept["image_models"] == ["林知夏"]
-    assert kept["models"] == ["林知夏"]
+    assert kept["in_feed"] is True
+    assert kept["image_models"] == [None]
+    assert kept["models"] == []
     assert added == []
 
 
@@ -138,6 +139,35 @@ def test_replace_clears_omitted_and_explicit_unassign():
     assert posts["9"]["in_feed"] is True
 
 
+def test_media_rows_replace_previous_labels():
+    posts = {"9": {
+        "id": "9",
+        "images": ["images/9_1.jpg", "images/9_2.jpg"],
+        "image_models": ["林知夏", "韩书允"],
+        "models": ["林知夏", "韩书允"],
+        "category": "夜拍",
+        "series": ["夜拍"],
+        "prompt": "keep",
+        "in_feed": True,
+    }}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "map.json")
+        json.dump({
+            "replace": True,
+            "media": [
+                {"post_id": "9", "index": 1, "src": "images/9_1.jpg", "status": "pending", "models": []},
+                {"post_id": "9", "index": 2, "src": "images/9_2.jpg", "status": "confirmed",
+                 "models": [{"zh": "林知夏", "en": "Lin Zhixia"}]},
+            ],
+        }, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+        xp.apply_model_media(posts, path)
+    assert posts["9"]["image_models"] == [None, "林知夏"]
+    assert posts["9"]["models"] == ["林知夏"]
+    assert posts["9"]["category"] == "夜拍"
+    assert posts["9"]["prompt"] == "keep"
+    assert posts["9"]["in_feed"] is True
+
+
 def test_cleanup_keeps_manifest(tmp=None):
     with tempfile.TemporaryDirectory() as tmp:
         img = os.path.join(tmp, "images"); thumb = os.path.join(tmp, "thumb"); os.makedirs(img); os.makedirs(thumb)
@@ -160,5 +190,6 @@ if __name__ == "__main__":
     test_missing_source_does_not_drop()
     test_one_confirmed_image_does_not_label_siblings()
     test_replace_clears_omitted_and_explicit_unassign()
+    test_media_rows_replace_previous_labels()
     test_cleanup_keeps_manifest()
     print("archive tests ok")
