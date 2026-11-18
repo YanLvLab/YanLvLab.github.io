@@ -85,7 +85,13 @@ html,body,body *{cursor:pointer}
 .letter{position:relative;padding:clamp(64px,10vh,120px) var(--pad);text-align:center}
 .letter-kicker,.sec-kicker,.hall-kicker{margin:0 0 16px;font:500 12px/1.4 var(--sans);letter-spacing:.12em;color:var(--gold-2)}
 .sec-kicker{letter-spacing:.22em;text-transform:uppercase}
-.letter-text{margin:0 auto;max-width:16em;font:400 clamp(22px,2.5vw,34px)/1.65 var(--serif);letter-spacing:.03em}
+.letter-text{margin:0 auto;max-width:100%;font:400 clamp(22px,5.2vw,28px)/1.65 var(--serif);letter-spacing:.03em;text-wrap:pretty}
+.letter-clause{display:block;max-width:100%}
+.letter-clause + .letter-clause{white-space:nowrap}
+@media (min-width:901px){
+  .letter-text{width:max-content;max-width:100%;font-size:clamp(28px,2.15vw,36px)}
+  .letter-clause{white-space:nowrap}
+}
 .letter-meta{display:flex;gap:14px;align-items:flex-start;text-align:left;width:min(520px,100%);margin:36px auto 0}
 .letter-who{min-width:0}
 .bio{white-space:pre-line;margin:8px 0 0;font:400 13.5px/1.65 var(--sans);letter-spacing:.01em;color:var(--bone-2);overflow-wrap:anywhere}

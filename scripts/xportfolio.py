@@ -194,47 +194,96 @@ def model_names(post):
     return out
 
 
-def apply_model_media(posts, path=None):
-    """Label archived images from data/model_media.json. One confirmed picture does not label its siblings.
+def _media_key(row):
+    return (str(row.get("post_id")), int(row.get("index")))
 
-    Labels already stored on an image stay if this file does not mention that image. Pending rows stay unassigned.
+
+def apply_model_media(posts, path=None):
+    """Replace per-image labels from a model_media file. One confirmed picture does not label its siblings.
+
+    A confirmed row sets that picture only. A pending, unassigned, or removed row clears it, including a label
+    stored earlier. With replace/mode "replace", a picture the file does not confirm is cleared too, so an old
+    label cannot stick by being omitted. Posts, prompts, categories, membership, and image files are not changed.
     Returns the number of confirmed labels applied."""
     path = path or MODEL_MEDIA
     if not os.path.exists(path):
         return 0
     data = json.load(open(path, encoding="utf-8"))
-    confirmed, pending = {}, set()
-    for row in data.get("confirmed") or []:
-        if row.get("model_zh") in CHARACTERS:
-            confirmed[(str(row["post_id"]), int(row["index"]))] = row["model_zh"]
-    for row in data.get("pending") or []:
-        pending.add((str(row["post_id"]), int(row["index"])))
+    replace = bool(data.get("replace") or data.get("mode") == "replace")
+    confirmed, clear, src_of = {}, set(), {}
+
+    def remember_src(key, row):
+        if row.get("src"):
+            src_of[key] = row["src"]
+
+    def one_label(row):
+        found = []
+        raw = row.get("models")
+        items = raw if isinstance(raw, list) else [row.get("model_zh")]
+        for item in items:
+            zh = item.get("zh") if isinstance(item, dict) else item
+            if zh in CHARACTERS and zh not in found:
+                found.append(zh)
+        if len(found) == 1 and (row.get("status") in (None, "", "confirmed")):
+            return found[0]
+        return None
+
+    media = data.get("media")
+    if isinstance(media, list):
+        for row in media:
+            if row.get("post_id") is None or row.get("index") is None:
+                continue
+            key = _media_key(row)
+            remember_src(key, row)
+            label = one_label(row) if row.get("status") == "confirmed" else None
+            if label:
+                confirmed[key] = label
+            else:
+                clear.add(key)
+    else:
+        for row in data.get("confirmed") or []:
+            if row.get("post_id") is None or row.get("index") is None:
+                continue
+            key = _media_key(row)
+            label = one_label(dict(row, status="confirmed"))
+            if not label:
+                continue
+            confirmed[key] = label
+            remember_src(key, row)
+        for bucket in ("pending", "unassigned", "removed"):
+            for row in data.get(bucket) or []:
+                if row.get("post_id") is None or row.get("index") is None:
+                    continue
+                key = _media_key(row)
+                confirmed.pop(key, None)
+                clear.add(key)
+                remember_src(key, row)
     applied = 0
     for p in posts.values():
-        images = p.get("images") or []
+        images = list(p.get("images") or [])
         if not images:
             continue
-        prev = list(p.get("image_models") or [])
         keys = [(str(p.get("id")), i) for i in range(1, len(images) + 1)]
-        if not any(k in confirmed or k in pending for k in keys) and not prev:
+        if not replace and not any(k in confirmed or k in clear for k in keys):
             continue
+        prev = list(p.get("image_models") or [])
         labels = []
         for n, key in enumerate(keys):
-            if key in confirmed:
+            named = key in confirmed and src_of.get(key, images[n]) == images[n]
+            if named:
                 labels.append(confirmed[key]); applied += 1
-            elif key in pending:
+            elif key in clear or replace or (key in confirmed and src_of.get(key) not in (None, images[n])):
                 labels.append(None)
             elif n < len(prev) and prev[n] in CHARACTERS:
                 labels.append(prev[n])
             else:
                 labels.append(None)
         p["image_models"] = labels
-        if any(k in confirmed or k in pending for k in keys):
-            seen = []
-            for m in labels:
-                if m and m not in seen:
-                    seen.append(m)
-            p["models"] = seen
+        seen = []
+        for m in labels:
+            if m and m not in seen:
+                seen.append(m)
+        p["models"] = seen
     return applied
 
 
