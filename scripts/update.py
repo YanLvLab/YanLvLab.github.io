@@ -28,22 +28,58 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import xportfolio as xp
 
 
+def _unwrap_page(page):
+    """Accept a raw API page or a tool envelope {response: page}."""
+    if isinstance(page, dict) and isinstance(page.get("response"), dict):
+        inner = page["response"]
+        if any(k in inner for k in ("data", "includes", "meta", "errors")):
+            return inner
+    return page
+
+
+def _require_posts(page, label):
+    page = _unwrap_page(page)
+    data = page.get("data") if isinstance(page, dict) else None
+    if not isinstance(data, list) or not data:
+        raise SystemExit(f"{label} has no posts; empty data is not a successful capture")
+    return page
+
+
 def pages_from_dataset(path):
-    """Read one collector attachment. Raw pages are returned; the file itself is not copied into the site."""
+    """Read one collector attachment. Raw pages are returned; the file itself is not copied into the site.
+
+    When full is present it is the authoritative capture. posts/replies are a split of that same
+    capture and are not read again. A page with empty data fails the ingest."""
     blob = json.load(open(path, encoding="utf-8"))
+    if isinstance(blob, dict) and isinstance(blob.get("response"), dict) and "full" not in blob and "posts" not in blob:
+        blob = blob["response"]
     if isinstance(blob, list):
-        return blob, None
-    if isinstance(blob, dict) and (isinstance(blob.get("data"), list) or "includes" in blob or "meta" in blob):
-        profile = blob.get("profile") if isinstance(blob.get("profile"), dict) else None
-        return [blob], profile
-    pages = []
-    for key in ("posts", "replies", "full", "pages"):
-        val = blob.get(key) or []
-        if isinstance(val, dict):
-            val = [val]
-        if isinstance(val, list):
-            pages.extend(item for item in val if isinstance(item, dict))
+        pages = [_require_posts(p, f"{path}[{i}]") for i, p in enumerate(blob)]
+        return pages, None
+    if not isinstance(blob, dict):
+        raise SystemExit(f"{path} is not a JSON object")
+    if blob.get("full"):
+        raw_pages = blob["full"]
+        label = "full"
+    elif isinstance(blob.get("data"), list) or "includes" in blob or "meta" in blob:
+        raw_pages = [blob]
+        label = path
+    else:
+        raw_pages = []
+        label = "pages"
+        for key in ("posts", "replies", "pages"):
+            val = blob.get(key) or []
+            if isinstance(val, dict):
+                val = [val]
+            if isinstance(val, list):
+                raw_pages.extend(val)
+    pages = [_require_posts(p, f"{label}[{i}]") for i, p in enumerate(raw_pages)]
     profile = blob.get("profile") if isinstance(blob.get("profile"), dict) else None
+    if profile:
+        profile = _unwrap_page(profile)
+        user = profile.get("data") if isinstance(profile.get("data"), dict) else None
+        if not user or not (user.get("id") or user.get("username")):
+            raise SystemExit("profile data is empty; not applying it")
     return pages, profile
 
 
@@ -243,7 +279,10 @@ def main():
     if a.profile:
         profile = build_profile(read_json_loose(a.profile))
     elif dataset_profile:
-        profile = build_profile(dataset_profile)
+        user = dataset_profile.get("data") or {}
+        followers = (user.get("public_metrics") or {}).get("followers_count")
+        if followers is not None:
+            profile["followers"] = followers
     out = xp.save(existing, profile)
     import categorize
     _, cat_stats, _ = categorize.attach()

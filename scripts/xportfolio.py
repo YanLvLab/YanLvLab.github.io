@@ -185,17 +185,26 @@ def at_or_after_gallery_cutoff(post):
     return dt.astimezone(SHANGHAI) >= GALLERY_CUTOFF
 
 
+# Official names only. A short alias such as Seoyun, Zhixia, or Yuna is not a gallery label.
+GALLERY_PATTERNS = (
+    ("韩书允", re.compile(r"韩书允|Han\s*Seoyun", re.I)),
+    ("林知夏", re.compile(r"林知夏|Lin\s*Zhixia", re.I)),
+    ("姜宥娜", re.compile(r"姜宥娜|Kang\s*Yuna", re.I)),
+)
+
+
 def model_names(post):
     """Gallery label from the author's own words, and only at or after GALLERY_CUTOFF.
 
-    A stored label is not kept and a picture is not inspected. Zero names, or more than one name, stay unassigned."""
+    A stored label is not kept and a picture is not inspected. Official Chinese, spaced English,
+    and no-space English names count. Zero names, or more than one name, stay unassigned."""
     if str(post.get("id") or "") in AMBIGUOUS_MODEL_IDS:
         return []
     if not at_or_after_gallery_cutoff(post):
         return []
-    blob_cap = "\n".join([post.get("caption") or "", post.get("text") or ""])
-    blob_prompt = "\n".join([post.get("prompt") or ""] + list(post.get("thread") or []))
-    detected = [s for s in classify(blob_cap, blob_prompt) if s in CHARACTERS]
+    blob = "\n".join([post.get("caption") or "", post.get("text") or "", post.get("prompt") or ""]
+                     + list(post.get("thread") or []))
+    detected = [zh for zh, pat in GALLERY_PATTERNS if pat.search(blob)]
     if len(detected) != 1:
         return []
     return detected
@@ -443,7 +452,7 @@ def merge_archive(existing, incoming):
             old = existing[pid]
             if p.get("metrics"):
                 old["metrics"] = p["metrics"]
-            if p.get("in_feed", True) and p.get("prompt"):
+            if not old.get("prompt") and p.get("in_feed", True) and p.get("prompt"):
                 for k in ("thread", "caption", "prompt", "prompt_source", "series", "text", "url"):
                     if k in p:
                         old[k] = p[k]

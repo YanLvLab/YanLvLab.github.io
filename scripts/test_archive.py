@@ -104,10 +104,42 @@ def test_visual_map_is_not_reapplied():
 def test_dataset_pages_are_read_without_copying():
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "catchup.json")
-        json.dump({"posts": [{"data": [], "meta": {}}], "replies": [], "full": []}, open(path, "w"))
+        json.dump({
+            "full": [{"data": [{"id": "1"}], "meta": {"result_count": 1}}],
+            "posts": [{"data": [{"id": "split"}]}],
+            "profile": {"data": {"id": "9", "username": "GenRyoma"}, "errors": [{"field": "verified_followers_count"}]},
+        }, open(path, "w"))
         pages, profile = update.pages_from_dataset(path)
-    assert len(pages) == 1 and pages[0]["data"] == []
-    assert profile is None
+    assert pages == [{"data": [{"id": "1"}], "meta": {"result_count": 1}}]
+    assert profile["data"]["username"] == "GenRyoma"
+
+
+def test_empty_dataset_page_is_not_success():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "empty.json")
+        json.dump({"full": [{"response": {"data": [], "meta": {"result_count": 0}}}]}, open(path, "w"))
+        try:
+            update.pages_from_dataset(path)
+        except SystemExit:
+            return
+    raise AssertionError("empty data was accepted")
+
+
+def test_gallery_names_are_official_only():
+    after = {"created_at": "2026-11-18T12:00:00+08:00", "caption": "", "prompt": "", "thread": []}
+    assert xp.model_names({**after, "text": "#HanSeoyun"}) == ["韩书允"]
+    assert xp.model_names({**after, "text": "KANG YUNA"}) == ["姜宥娜"]
+    assert xp.model_names({**after, "text": "Lin Zhixia"}) == ["林知夏"]
+    assert xp.model_names({**after, "text": "Seoyun"}) == []
+    assert xp.model_names({**after, "text": "Yuna"}) == []
+    assert xp.model_names({**after, "text": "韩书允 林知夏"}) == []
+
+
+def test_reply_to_someone_else_is_not_a_prompt():
+    root = photo("80", "只有一句问候", created="2026-11-18T04:00:00.000Z")
+    reply = photo("81", PROMPT, reply_parent="80", reply_to="999", created="2026-11-18T04:01:00.000Z")
+    feed, rejected, model_only = xp.normalise([wrap([root, reply])])
+    assert "80" not in feed and "80" not in model_only
 
 
 def test_unnamed_photo_is_not_assigned():
@@ -248,6 +280,9 @@ if __name__ == "__main__":
     test_gap_prompt_is_in_feed_without_gallery_label()
     test_visual_map_is_not_reapplied()
     test_dataset_pages_are_read_without_copying()
+    test_empty_dataset_page_is_not_success()
+    test_gallery_names_are_official_only()
+    test_reply_to_someone_else_is_not_a_prompt()
     test_unnamed_photo_is_not_assigned()
     test_all_three_names_are_not_assigned()
     test_missing_source_does_not_drop()
