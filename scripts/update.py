@@ -12,10 +12,11 @@ X data can only be fetched through the X MCP tools (no API keys live in this rep
   python3 scripts/update.py --print-since-time                # UTC start_time for the daily search (newest - 48h)
 
 RULE: the theme feed keeps image posts that carry the author's own generation prompt (post text or the
-author's own replies). Author images that name 韩书允 / 林知夏 / 姜宥娜 without a prompt are archived for
-the picture-only model galleries. Already archived ids, local image files, prompts, and model labels are
-never deleted because a later fetch omits them or the source post is gone. hidden.json suppresses display
-only. Uncertain cases go to review/excluded.json.
+author's own replies). Picture galleries include only a post created at or after 2026-11-18T10:37:00+08:00
+whose own words name exactly one of 韩书允 / 林知夏 / 姜宥娜. Older labels, including author names and the
+visual role-card map, are not restored. Already archived ids, local image files, and prompts are never
+deleted because a later fetch omits them. hidden.json suppresses display only. Uncertain cases go to
+review/excluded.json.
 
 Input files: the JSON body returned by get_users_posts or search_posts_all (keys data/includes/meta),
 requested with expansions=attachments.media_keys,referenced_posts and
@@ -25,6 +26,61 @@ entities,referenced_tweets,text,note_post. Wrapper text around the JSON is toler
 import argparse, json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import xportfolio as xp
+
+
+def _unwrap_page(page):
+    """Accept a raw API page or a tool envelope {response: page}."""
+    if isinstance(page, dict) and isinstance(page.get("response"), dict):
+        inner = page["response"]
+        if any(k in inner for k in ("data", "includes", "meta", "errors")):
+            return inner
+    return page
+
+
+def _require_posts(page, label):
+    page = _unwrap_page(page)
+    data = page.get("data") if isinstance(page, dict) else None
+    if not isinstance(data, list) or not data:
+        raise SystemExit(f"{label} has no posts; empty data is not a successful capture")
+    return page
+
+
+def pages_from_dataset(path):
+    """Read one collector attachment. Raw pages are returned; the file itself is not copied into the site.
+
+    When full is present it is the authoritative capture. posts/replies are a split of that same
+    capture and are not read again. A page with empty data fails the ingest."""
+    blob = json.load(open(path, encoding="utf-8"))
+    if isinstance(blob, dict) and isinstance(blob.get("response"), dict) and "full" not in blob and "posts" not in blob:
+        blob = blob["response"]
+    if isinstance(blob, list):
+        pages = [_require_posts(p, f"{path}[{i}]") for i, p in enumerate(blob)]
+        return pages, None
+    if not isinstance(blob, dict):
+        raise SystemExit(f"{path} is not a JSON object")
+    if blob.get("full"):
+        raw_pages = blob["full"]
+        label = "full"
+    elif isinstance(blob.get("data"), list) or "includes" in blob or "meta" in blob:
+        raw_pages = [blob]
+        label = path
+    else:
+        raw_pages = []
+        label = "pages"
+        for key in ("posts", "replies", "pages"):
+            val = blob.get(key) or []
+            if isinstance(val, dict):
+                val = [val]
+            if isinstance(val, list):
+                raw_pages.extend(val)
+    pages = [_require_posts(p, f"{label}[{i}]") for i, p in enumerate(raw_pages)]
+    profile = blob.get("profile") if isinstance(blob.get("profile"), dict) else None
+    if profile:
+        profile = _unwrap_page(profile)
+        user = profile.get("data") if isinstance(profile.get("data"), dict) else None
+        if not user or not (user.get("id") or user.get("username")):
+            raise SystemExit("profile data is empty; not applying it")
+    return pages, profile
 
 
 def read_json_loose(path):
@@ -164,6 +220,7 @@ def ingest_prepared(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", nargs="*", default=[], help="raw X API JSON files: image posts AND self-reply searches")
+    ap.add_argument("--dataset", help="one JSON attachment: a raw X page, or {posts, replies, full, profile}")
     ap.add_argument("--profile")
     ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--reclassify", action="store_true", help="re-apply prompt rule / series / overrides to stored posts")
@@ -186,6 +243,10 @@ def main():
         return
     hidden, force = xp.load_overrides()
     raws = [read_json_loose(f) for f in a.input]
+    dataset_profile = None
+    if a.dataset:
+        extra, dataset_profile = pages_from_dataset(a.dataset)
+        raws.extend(extra)
     incoming, rejected, model_only = xp.normalise(raws, hidden, force)
     xp.apply_image_overrides(incoming, raws, download_now=False)
     fresh = dict(model_only)
@@ -212,12 +273,16 @@ def main():
                 if p.get("prompt"):
                     p["in_feed"] = True
                     p["series"] = xp.classify(p.get("caption") or "", p.get("prompt") or "")
-            p["models"] = xp.model_names(p)
+            xp.stamp_gallery(p)
             if pid in hidden:
                 p["suppressed"] = True
-        xp.apply_model_media(existing)
     if a.profile:
         profile = build_profile(read_json_loose(a.profile))
+    elif dataset_profile:
+        user = dataset_profile.get("data") or {}
+        followers = (user.get("public_metrics") or {}).get("followers_count")
+        if followers is not None:
+            profile["followers"] = followers
     out = xp.save(existing, profile)
     import categorize
     _, cat_stats, _ = categorize.attach()

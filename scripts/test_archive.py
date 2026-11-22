@@ -9,8 +9,8 @@ USER = xp.USER_ID
 PROMPT = "提示词：\n9:16竖版，超写实摄影，机位平视，光线柔和，东亚女性，长发，服装黑色，场景室内，全身构图，质感真实"
 
 
-def photo(pid, text, author=USER, reply_to=None, reply_parent=None):
-    t = {"id": pid, "author_id": author, "text": text, "created_at": "2026-11-01T00:00:00.000Z",
+def photo(pid, text, author=USER, reply_to=None, reply_parent=None, created="2026-11-01T00:00:00.000Z"):
+    t = {"id": pid, "author_id": author, "text": text, "created_at": created,
          "attachments": {"media_keys": ["m" + pid]}, "public_metrics": {"like_count": 1}}
     if reply_parent:
         t["referenced_tweets"] = [{"type": "replied_to", "id": reply_parent}]
@@ -44,12 +44,102 @@ def test_third_party_reply_ignored():
 
 
 def test_named_photo_without_prompt_is_model_only():
-    root = photo("60", "林知夏，一张无提示词的图片")
+    root = photo("60", "林知夏，一张无提示词的图片", created="2026-11-18T02:37:00.000Z")
     feed, rejected, model_only = xp.normalise([wrap([root])])
     assert "60" not in feed
     assert model_only["60"]["in_feed"] is False
     assert model_only["60"]["models"] == ["林知夏"]
     assert model_only["60"]["prompt"] == ""
+
+
+def test_pre_cutoff_name_is_not_a_gallery():
+    root = photo("61", "林知夏，一张无提示词的图片")
+    feed, rejected, model_only = xp.normalise([wrap([root])])
+    assert "61" not in feed and "61" not in model_only
+
+
+def test_two_names_after_cutoff_stay_pending():
+    root = photo("63", "林知夏和韩书允同框", created="2026-11-18T03:00:00.000Z")
+    feed, rejected, model_only = xp.normalise([wrap([root])])
+    assert "63" not in feed and "63" not in model_only
+    assert xp.model_names({"id": "63", "created_at": "2026-11-18T11:00:00+08:00",
+                            "text": "林知夏和韩书允", "caption": "", "prompt": "", "thread": []}) == []
+
+
+def test_gap_prompt_is_in_feed_without_gallery_label():
+    root = photo("65", PROMPT + "\n林知夏", created="2026-11-18T01:00:00.000Z")
+    feed, rejected, model_only = xp.normalise([wrap([root])])
+    assert "65" in feed
+    assert feed["65"]["models"] == []
+    assert "65" not in model_only
+
+
+def test_visual_map_is_not_reapplied():
+    existing = {"2122716282751754684": {
+        "id": "2122716282751754684",
+        "created_at": "2026-11-17T23:39:34+08:00",
+        "images": ["images/2122716282751754684_1.jpg"],
+        "image_models": ["林知夏"],
+        "models": ["林知夏"],
+        "prompt": "keep",
+        "text": "林知夏",
+        "caption": "林知夏",
+        "thread": [],
+        "category": "夜拍",
+        "series": ["夜拍"],
+        "in_feed": True,
+    }}
+    merged, added, _ = xp.merge_archive(existing, {})
+    kept = merged["2122716282751754684"]
+    assert kept["image_models"] == [None]
+    assert kept["models"] == []
+    assert kept["prompt"] == "keep"
+    assert kept["category"] == "夜拍"
+    assert kept["series"] == ["夜拍"]
+    assert kept["images"] == ["images/2122716282751754684_1.jpg"]
+    assert kept["in_feed"] is True
+    assert added == []
+
+
+def test_dataset_pages_are_read_without_copying():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "catchup.json")
+        json.dump({
+            "full": [{"data": [{"id": "1"}], "meta": {"result_count": 1}}],
+            "posts": [{"data": [{"id": "split"}]}],
+            "profile": {"data": {"id": "9", "username": "GenRyoma"}, "errors": [{"field": "verified_followers_count"}]},
+        }, open(path, "w"))
+        pages, profile = update.pages_from_dataset(path)
+    assert pages == [{"data": [{"id": "1"}], "meta": {"result_count": 1}}]
+    assert profile["data"]["username"] == "GenRyoma"
+
+
+def test_empty_dataset_page_is_not_success():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "empty.json")
+        json.dump({"full": [{"response": {"data": [], "meta": {"result_count": 0}}}]}, open(path, "w"))
+        try:
+            update.pages_from_dataset(path)
+        except SystemExit:
+            return
+    raise AssertionError("empty data was accepted")
+
+
+def test_gallery_names_are_official_only():
+    after = {"created_at": "2026-11-18T12:00:00+08:00", "caption": "", "prompt": "", "thread": []}
+    assert xp.model_names({**after, "text": "#HanSeoyun"}) == ["韩书允"]
+    assert xp.model_names({**after, "text": "KANG YUNA"}) == ["姜宥娜"]
+    assert xp.model_names({**after, "text": "Lin Zhixia"}) == ["林知夏"]
+    assert xp.model_names({**after, "text": "Seoyun"}) == []
+    assert xp.model_names({**after, "text": "Yuna"}) == []
+    assert xp.model_names({**after, "text": "韩书允 林知夏"}) == []
+
+
+def test_reply_to_someone_else_is_not_a_prompt():
+    root = photo("80", "只有一句问候", created="2026-11-18T04:00:00.000Z")
+    reply = photo("81", PROMPT, reply_parent="80", reply_to="999", created="2026-11-18T04:01:00.000Z")
+    feed, rejected, model_only = xp.normalise([wrap([root, reply])])
+    assert "80" not in feed and "80" not in model_only
 
 
 def test_unnamed_photo_is_not_assigned():
@@ -185,6 +275,14 @@ if __name__ == "__main__":
     test_author_reply_prompt_only()
     test_third_party_reply_ignored()
     test_named_photo_without_prompt_is_model_only()
+    test_pre_cutoff_name_is_not_a_gallery()
+    test_two_names_after_cutoff_stay_pending()
+    test_gap_prompt_is_in_feed_without_gallery_label()
+    test_visual_map_is_not_reapplied()
+    test_dataset_pages_are_read_without_copying()
+    test_empty_dataset_page_is_not_success()
+    test_gallery_names_are_official_only()
+    test_reply_to_someone_else_is_not_a_prompt()
     test_unnamed_photo_is_not_assigned()
     test_all_three_names_are_not_assigned()
     test_missing_source_does_not_drop()
