@@ -168,30 +168,47 @@ def classify(caption, prompt=""):
 
 # One picture that names every model at once is not a portrait of any of them.
 AMBIGUOUS_MODEL_IDS = {"2117870734303531012"}
+# Picture galleries restart here. Older author names and the visual role-card map are not gallery labels.
+GALLERY_CUTOFF = datetime.fromisoformat("2026-11-18T10:37:00+08:00")
+
+
+def at_or_after_gallery_cutoff(post):
+    raw = post.get("created_at") or ""
+    if not raw:
+        return False
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=SHANGHAI)
+    return dt.astimezone(SHANGHAI) >= GALLERY_CUTOFF
 
 
 def model_names(post):
-    """Character labels already stored, plus names written in the author's own caption, prompt, or post text.
+    """Gallery label from the author's own words, and only at or after GALLERY_CUTOFF.
 
-    A name is never assigned by looking at a picture. Stored labels are kept even if a later fetch omits them.
-    If the text names all three models, nothing is assigned."""
+    A stored label is not kept and a picture is not inspected. Zero names, or more than one name, stay unassigned."""
     if str(post.get("id") or "") in AMBIGUOUS_MODEL_IDS:
         return []
-    prev = []
-    for raw in post.get("models") or []:
-        label = raw.get("zh") if isinstance(raw, dict) else raw
-        if label in CHARACTERS and label not in prev:
-            prev.append(label)
+    if not at_or_after_gallery_cutoff(post):
+        return []
     blob_cap = "\n".join([post.get("caption") or "", post.get("text") or ""])
     blob_prompt = "\n".join([post.get("prompt") or ""] + list(post.get("thread") or []))
     detected = [s for s in classify(blob_cap, blob_prompt) if s in CHARACTERS]
-    if set(detected) >= CHARACTERS:
+    if len(detected) != 1:
         return []
-    out = []
-    for m in prev + detected:
-        if m not in out:
-            out.append(m)
-    return out
+    return detected
+
+
+def stamp_gallery(post):
+    """Write image_models from model_names. Does not change prompt, category, series, files, or membership."""
+    labels = model_names(post)
+    images = post.get("images") or []
+    post["models"] = labels
+    if images:
+        post["image_models"] = [labels[0]] * len(images) if len(labels) == 1 else [None] * len(images)
+    return labels
 
 
 def _media_key(row):
@@ -394,7 +411,8 @@ def normalise(responses, hidden=(), force=()):
             if t["id"] in force and verdict != "yes":
                 verdict, src = "yes", src or "manual"
                 prompt = prompt or "\n\n".join([text] + thread)
-            draft = {"caption": caption if verdict == "yes" else "", "prompt": prompt if verdict == "yes" else "",
+            draft = {"id": t["id"], "created_at": to_shanghai(t["created_at"]),
+                     "caption": caption if verdict == "yes" else "", "prompt": prompt if verdict == "yes" else "",
                      "text": text, "thread": thread}
             models = model_names(draft)
             if t["id"] in hidden or verdict != "yes":
@@ -410,16 +428,15 @@ def normalise(responses, hidden=(), force=()):
             rejected.pop(t["id"], None)
             model_only.pop(t["id"], None)
             series = classify(caption, prompt)
-            posts[t["id"]] = _base_post(t, text, thread, photos, caption, prompt, src, series, model_names({
-                "caption": caption, "prompt": prompt, "text": text, "thread": thread, "models": [s for s in series if s in CHARACTERS]
-            }), True)
+            posts[t["id"]] = _base_post(t, text, thread, photos, caption, prompt, src, series, models, True)
     return posts, rejected, model_only
 
 
 def merge_archive(existing, incoming):
     """Stable-id merge. Keys already archived are never deleted because a later fetch omitted them.
 
-    A post that already has a prompt stays in the theme feed. Model labels already stored are kept."""
+    A post that already has a prompt stays in the theme feed. Gallery labels are recomputed from the
+    author's words at or after the cutoff; a label stored earlier is not put back."""
     added, refreshed = [], 0
     for pid, p in incoming.items():
         if pid in existing:
@@ -433,9 +450,6 @@ def merge_archive(existing, incoming):
                 old["in_feed"] = True
             elif old.get("in_feed") is None and old.get("prompt"):
                 old["in_feed"] = True
-            old["models"] = model_names({"models": (old.get("models") or []) + (p.get("models") or []),
-                                         "caption": old.get("caption") or "", "prompt": old.get("prompt") or "",
-                                         "text": old.get("text") or "", "thread": old.get("thread") or []})
             if p.get("images") and not old.get("images"):
                 old["images"] = p["images"]
                 old["thumbs"] = p.get("thumbs") or []
@@ -447,9 +461,7 @@ def merge_archive(existing, incoming):
     for old in existing.values():
         if old.get("prompt") and old.get("in_feed") is None:
             old["in_feed"] = True
-        if not old.get("image_models"):
-            old["models"] = model_names(old)
-    apply_model_media(existing)
+        stamp_gallery(old)
     return existing, added, refreshed
 
 
