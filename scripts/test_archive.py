@@ -258,6 +258,63 @@ def test_media_rows_replace_previous_labels():
     assert posts["9"]["in_feed"] is True
 
 
+def test_manual_label_waives_cutoff_and_empty_replace_does_not_wipe():
+    post = {
+        "id": "2108082855930913088",
+        "created_at": "2026-10-08T14:31:33+08:00",
+        "text": "无角色名",
+        "caption": "", "prompt": "", "thread": [],
+        "images": ["images/2108082855930913088_1.jpg", "images/2108082855930913088_2.jpg"],
+        "image_models": [None, None],
+    }
+    other = {
+        "id": "2100000000000000001",
+        "created_at": "2026-10-01T00:00:00+08:00",
+        "text": "林知夏",
+        "caption": "", "prompt": "", "thread": [],
+        "images": ["images/x.jpg"],
+        "image_models": ["林知夏"],
+        "models": ["林知夏"],
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "model_media.json")
+        json.dump({
+            "replace": False,
+            "media": [{
+                "post_id": "2108082855930913088", "index": 1, "status": "confirmed",
+                "manual": True, "model_zh": "韩书允", "src": "images/2108082855930913088_1.jpg",
+            }],
+        }, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+        assert xp.stamp_gallery(post, manual_path=path) == ["韩书允"]
+        assert post["image_models"] == ["韩书允", None]
+        assert post["models"] == ["韩书允"]
+        assert xp.stamp_gallery(other, manual_path=path) == []
+        assert other["image_models"] == [None]
+        assert other["models"] == []
+        empty = os.path.join(tmp, "empty.json")
+        json.dump({"replace": True, "media": []}, open(empty, "w"))
+        kept = {
+            "id": "2108082855930913088",
+            "created_at": "2026-10-08T14:31:33+08:00",
+            "text": "无角色名", "caption": "", "prompt": "", "thread": [],
+            "images": ["images/2108082855930913088_1.jpg"],
+            "image_models": ["韩书允"], "models": ["韩书允"],
+        }
+        assert xp.stamp_gallery(kept, manual_path=empty) == []
+        assert kept["image_models"] == [None]
+        echo = {
+            "id": "1", "created_at": "2026-11-20T00:00:00+08:00", "category": "灵感回响",
+            "text": "韩书允", "caption": "", "prompt": "", "thread": [],
+            "images": ["images/1.jpg"], "image_models": ["韩书允"], "models": ["韩书允"],
+        }
+        assert xp.stamp_gallery(echo, manual_path=empty) == []
+        assert echo["image_models"] == [None] and echo["models"] == []
+        posts = {"9": {"id": "9", "images": ["images/9_1.jpg"], "image_models": ["韩书允"], "models": ["韩书允"]}}
+        assert xp.apply_model_media(posts, empty) == 0
+        assert posts["9"]["image_models"] == ["韩书允"]
+        assert posts["9"]["models"] == ["韩书允"]
+
+
 def test_cleanup_keeps_manifest(tmp=None):
     with tempfile.TemporaryDirectory() as tmp:
         img = os.path.join(tmp, "images"); thumb = os.path.join(tmp, "thumb"); os.makedirs(img); os.makedirs(thumb)
@@ -289,5 +346,6 @@ if __name__ == "__main__":
     test_one_confirmed_image_does_not_label_siblings()
     test_replace_clears_omitted_and_explicit_unassign()
     test_media_rows_replace_previous_labels()
+    test_manual_label_waives_cutoff_and_empty_replace_does_not_wipe()
     test_cleanup_keeps_manifest()
     print("archive tests ok")

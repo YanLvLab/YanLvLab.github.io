@@ -2,7 +2,7 @@
 """Apply site.config.json switches to the static files.
 
 noindex      -> <meta name="robots" content="noindex, nofollow"> in index.html + robots.txt "Disallow: /"
-adult_notice -> read at runtime by assets/app.js (age-confirmation overlay); nothing to write here.
+adult_notice -> read at runtime by assets/app.js (NSFW entry gate); nothing to write here.
 Both default to false."""
 import json, os, re
 

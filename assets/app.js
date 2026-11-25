@@ -128,7 +128,7 @@
   const CHARACTERS = ["韩书允", "林知夏", "姜宥娜"];
   const EN = { "韩书允": "Han Seoyun", "林知夏": "Lin Zhixia", "姜宥娜": "Kang Yuna", "新中式": "Neo-Chinoiserie", "夜拍": "Nocturne", "泳装": "The Swim", "职业装": "Office Couture",
     "舞蹈": "The Dance", "运动": "Sport Club", "Cosplay": "Masquerade", "微醺": "Tipsy Hour", "户外": "Wilderness", "学院风": "Academia", "内衣私房": "Boudoir",
-    "丝袜": "Silk & Sheer", "OOTD": "Outfit of the Day", "POV": "Point of View", "城市日常": "City Days", "游戏": "Play", "其他": "Miscellany", "偏殿": "Side Chambers" };
+    "丝袜": "Silk & Sheer", "OOTD": "Outfit of the Day", "POV": "Point of View", "城市日常": "City Days", "游戏": "Play", "灵感回响": "Echoes", "其他": "Miscellany", "偏殿": "Side Chambers" };
   const GLOW = ["rgba(216,184,120,.09)", "rgba(185,227,220,.07)", "rgba(200,184,255,.08)", "rgba(243,196,166,.08)"];
   // editorial rows: counts cycle 2-3-4-3; never leave a lonely single at the end
   function rowsOf(list) {
@@ -563,7 +563,7 @@
   }
 
   // ---------- gate (site.config.json adult_notice)
-  const GATE_DEFAULT = { adult_notice: true, adult_notice_text: "本站包含 AI 生成的成人时尚写真（均为虚构成年模特，无裸露）。请确认你已年满 18 岁后继续浏览。", adult_notice_confirm: "我已年满 18 岁，进入", adult_notice_leave: "离开" };
+  const GATE_DEFAULT = { adult_notice: true, adult_notice_text: "本站包含 NSFW 内容：AI 生成的成人时尚写真（均为虚构成年模特，无裸露）。请确认后继续浏览。", adult_notice_confirm: "我已知晓，进入", adult_notice_leave: "离开" };
   function gate(cfg) {
     // Show unless adult_notice is explicitly false. Missing, unreadable, or {} still fail closed.
     if (cfg && cfg.adult_notice === false) return;

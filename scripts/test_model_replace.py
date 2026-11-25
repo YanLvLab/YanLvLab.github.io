@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Retention check for the catalogue after the 2026-11-23 daily increment.
+"""Retention check for posts already on the site before this batch.
 
-Posts already on c9777f1 keep their images, prompts, categories, and membership.
-Gallery labels on those posts stay cleared. Author-text labels are only the
-original six pictures plus the nine pictures added on 2026-11-23.
+Posts on b873f7d keep their images, prompts, categories, and membership.
+Gallery labels already on that commit stay as they were. Later manual labels
+are not cleared, and an empty replace of model_media.json is not applied.
 """
 import json, os, subprocess, sys
 from collections import Counter
 
 BASE = "c9777f148a8742e1d510cc539f63f614596245e5"
+PRE = "b873f7de179db72b2afbcee288ba867922872870"
 KEEP_SAME = ("images", "thumbs", "prompt", "caption", "text", "thread", "category", "series", "in_feed", "prompt_source")
 LABELED = {
     "2123056954772005040": ["韩书允"],
@@ -20,23 +21,26 @@ LABELED = {
 }
 
 
-def git_json(path):
-    raw = subprocess.check_output(["git", "show", f"{BASE}:{path}"])
+def git_json(path, rev=BASE):
+    raw = subprocess.check_output(["git", "show", f"{rev}:{path}"])
     return json.loads(raw.decode())
 
 
 def main():
     old = git_json("data/posts.json")
+    pre = git_json("data/posts.json", PRE)
     new = json.load(open("data/posts.json", encoding="utf-8"))
     old_posts = {p["id"]: p for p in old["posts"]}
+    pre_posts = {p["id"]: p for p in pre["posts"]}
     new_posts = {p["id"]: p for p in new["posts"]}
-    assert set(old_posts) <= set(new_posts)
-    for pid, prev in old_posts.items():
+    assert set(old_posts) <= set(pre_posts) <= set(new_posts)
+    for pid, prev in pre_posts.items():
         cur = new_posts[pid]
         for key in KEEP_SAME:
             assert prev.get(key) == cur.get(key), (pid, key)
-        assert cur.get("image_models") == [None] * len(cur.get("images") or [])
-        assert cur.get("models") == []
+        if pid not in LABELED:
+            assert cur.get("image_models") == [None] * len(cur.get("images") or [])
+            assert cur.get("models") == []
         for rel in (cur.get("images") or []) + (cur.get("thumbs") or []):
             assert os.path.isfile(rel) and os.path.getsize(rel) > 800, rel
     counts = Counter()
@@ -46,28 +50,38 @@ def main():
         assert not new_posts[pid].get("prompt")
         for lab in labels:
             counts[lab] += 1
-    for p in new["posts"]:
-        if p["id"] in LABELED or p["id"] in old_posts:
-            continue
-        assert p.get("image_models") == [None] * len(p.get("images") or [])
-    assert counts["韩书允"] == 5 and counts["林知夏"] == 2 and counts["姜宥娜"] == 8
+    you = "姜宥娜"
+    assert [ord(c) for c in you] == [0x59DC, 0x5BA5, 0x5A1C]
+    assert counts["韩书允"] == 5 and counts["林知夏"] == 2 and counts[you] == 8
     feed = [p for p in new["posts"] if p.get("in_feed") is not False and not p.get("suppressed")]
     assert len(old["posts"]) == 152
-    assert len(new["posts"]) == 192
-    assert len(feed) == 184
-    assert sum(len(p["images"]) for p in new["posts"]) == 220
+    assert len(pre["posts"]) == 192
+    assert len(new["posts"]) == 326
+    assert len(feed) == 257
+    assert sum(len(p["images"]) for p in new["posts"]) == 431
+    echoes = [p for p in new["posts"] if p.get("category") == "灵感回响"]
+    assert len(echoes) == 62 and sum(len(p["images"]) for p in echoes) == 79
+    assert all(p.get("in_feed") is True and not p.get("prompt") for p in echoes)
+    assert "2121985063353237859" not in new_posts
+    violet = new_posts["2121647597672669387"]
+    assert violet["media"][0]["src"].endswith("HXLOH6CaUAAhqJE.jpg")
+    assert violet["prompt"] and violet["in_feed"] is True
     thread = new_posts["2124719959389691906"]
     assert thread["in_feed"] is True and thread["prompt_source"] == "thread" and "连体衣" in thread["prompt"]
     assert "2124718331466862876" not in new_posts
     mirror = new_posts["2124868239339753937"]
     assert mirror["in_feed"] is True and mirror["category"] == "内衣私房" and mirror["category"] not in ("其他", "偏殿")
-    assert new["profile"]["followers"] == 5645
-    assert new["profile"]["bio"] == old["profile"]["bio"]
-    assert new["profile"]["name"] == old["profile"]["name"]
+    assert new["profile"]["followers"] == 5665
+    assert new["profile"]["bio"] == pre["profile"]["bio"]
+    assert new["profile"]["name"] == pre["profile"]["name"]
+    assert "灵感回响" in new["category_order"]
+    media = json.load(open("data/model_media.json", encoding="utf-8"))
+    assert media.get("replace") is False and media.get("media")
+    assert not (media.get("replace") and media.get("media") == [])
     blob = open("data/posts.json", encoding="utf-8").read()
     for bad in ("/workspace", "/home/", "sand-data", "x-fashion", "dataset_raw_pages"):
         assert bad not in blob
-    print(json.dumps({"archive": 192, "feed": 184, "images": 220, "韩书允": 5, "林知夏": 2, "姜宥娜": 8}, ensure_ascii=False))
+    print(json.dumps({"archive": len(new["posts"]), "feed": len(feed), "images": sum(len(p["images"]) for p in new["posts"]), "echoes": len(echoes), "韩书允": 5, "林知夏": 2, "姜宥娜": 8}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

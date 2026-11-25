@@ -1,5 +1,5 @@
 {
- "_note": "ids: never show. include_ids: show even though no prompt was auto-detected (use after manual check). Then run: python3 scripts/update.py --reclassify",
+ "_note": "ids: never show. include_ids: show even though no prompt was auto-detected (use after manual check). Then run: python3 scripts/update.py --reclassify. 2121985063353237859 is the 修手 quote whose picture is already the display image of 2121647597672669387. 2112014302333063230 and 2114910533304647847 repeat pictures already published on 2112014402539180057 and 2114917840570741234.",
  "ids": [
   "2118973582579740805",
   "2112876812292567486",
@@ -14,7 +14,10 @@
   "2105591005907202515",
   "2067106760838783222",
   "2062068527780253882",
-  "2118189980061503990"
+  "2118189980061503990",
+  "2121985063353237859",
+  "2112014302333063230",
+  "2114910533304647847"
  ],
  "include_ids": []
 }

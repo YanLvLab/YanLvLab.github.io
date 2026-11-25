@@ -2,8 +2,8 @@
   "_note": "站点开关，由皇帝决定。改完运行 python3 scripts/apply_config.py（update.py 每次也会自动执行）。",
   "noindex": false,
   "adult_notice": true,
-  "adult_notice_text": "本站包含 AI 生成的成人时尚写真（均为虚构成年模特，无裸露）。请确认你已年满 18 岁后继续浏览。",
-  "adult_notice_confirm": "我已年满 18 岁，进入",
+  "adult_notice_text": "本站包含 NSFW 内容：AI 生成的成人时尚写真（均为虚构成年模特，无裸露）。请确认后继续浏览。",
+  "adult_notice_confirm": "我已知晓，进入",
   "adult_notice_leave": "离开",
   "cover_id": "2117514551319265756"
 }

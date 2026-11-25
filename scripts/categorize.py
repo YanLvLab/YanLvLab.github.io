@@ -33,7 +33,7 @@ class CategorizeError(Exception):
 ORDER = [
     "新中式", "泳装", "学院风", "舞蹈", "职业装", "运动", "微醺",
     "内衣私房", "OOTD", "丝袜", "夜拍", "城市日常",
-    "户外", "POV", "Cosplay", "游戏",
+    "户外", "POV", "Cosplay", "游戏", "灵感回响",
 ]
 
 # When a raw category ends up with fewer than MIN_HALL works, merge it here.

@@ -210,10 +210,72 @@ def model_names(post):
     return detected
 
 
-def stamp_gallery(post):
-    """Write image_models from model_names. Does not change prompt, category, series, files, or membership."""
-    labels = model_names(post)
+_manual_cache = {"key": None, "map": {}}
+
+
+def manual_label_map(path=None):
+    """Owner-assigned per-image labels. These waive the 2026-11-18 10:37 cutoff.
+
+    Only rows with manual:true are read. A replace:true file with no rows is ignored,
+    so an empty gallery file cannot be applied as a wipe."""
+    path = path or MODEL_MEDIA
+    try:
+        st = os.stat(path)
+        key = (path, st.st_mtime_ns, st.st_size)
+    except OSError:
+        return {}
+    if _manual_cache["key"] == key:
+        return _manual_cache["map"]
+    try:
+        data = json.load(open(path, encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    rows = data.get("media") if isinstance(data.get("media"), list) else list(data.get("confirmed") or [])
+    if data.get("replace") and not rows:
+        _manual_cache.update(key=key, map={})
+        return {}
+    out = {}
+    for row in rows:
+        if not row.get("manual"):
+            continue
+        if row.get("status") not in (None, "", "confirmed"):
+            continue
+        zh = row.get("model_zh")
+        if zh not in CHARACTERS:
+            continue
+        pid = str(row.get("post_id") or "")
+        if not pid or row.get("index") is None:
+            continue
+        out.setdefault(pid, {})[int(row["index"])] = zh
+    _manual_cache.update(key=key, map=out)
+    return out
+
+
+def stamp_gallery(post, manual_path=None):
+    """Write image_models. A manual row wins for that picture, including before the cutoff.
+
+    Does not change prompt, category, series, files, or membership. One manual picture
+    does not label its siblings."""
     images = post.get("images") or []
+    manual = manual_label_map(manual_path).get(str(post.get("id") or ""))
+    if manual is not None:
+        labels = []
+        for i in range(1, len(images) + 1):
+            zh = manual.get(i)
+            labels.append(zh if zh in CHARACTERS else None)
+        post["image_models"] = labels
+        seen = []
+        for m in labels:
+            if m and m not in seen:
+                seen.append(m)
+        post["models"] = seen
+        return seen
+    if post.get("category") == "灵感回响":
+        post["models"] = []
+        if images:
+            post["image_models"] = [None] * len(images)
+        return []
+    labels = model_names(post)
     post["models"] = labels
     if images:
         post["image_models"] = [labels[0]] * len(images) if len(labels) == 1 else [None] * len(images)
@@ -236,6 +298,11 @@ def apply_model_media(posts, path=None):
         return 0
     data = json.load(open(path, encoding="utf-8"))
     replace = bool(data.get("replace") or data.get("mode") == "replace")
+    media = data.get("media")
+    has_rows = (isinstance(media, list) and len(media) > 0) or any(data.get(k) for k in ("confirmed", "pending", "unassigned", "removed"))
+    if replace and not has_rows:
+        print("model_media: refusing empty replace; galleries left untouched", file=sys.stderr)
+        return 0
     confirmed, clear, src_of = {}, set(), {}
 
     def remember_src(key, row):
@@ -445,7 +512,9 @@ def merge_archive(existing, incoming):
     """Stable-id merge. Keys already archived are never deleted because a later fetch omitted them.
 
     A post that already has a prompt stays in the theme feed. Gallery labels are recomputed from the
-    author's words at or after the cutoff; a label stored earlier is not put back."""
+    author's words at or after the cutoff; a label stored earlier is not put back. Rows marked manual
+    in model_media.json are the exception: they are reapplied even before the cutoff, and an empty
+    replace:true file is not a wipe list."""
     added, refreshed = [], 0
     for pid, p in incoming.items():
         if pid in existing:
