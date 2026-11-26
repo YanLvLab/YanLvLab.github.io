@@ -56,9 +56,9 @@ def main():
     feed = [p for p in new["posts"] if p.get("in_feed") is not False and not p.get("suppressed")]
     assert len(old["posts"]) == 152
     assert len(pre["posts"]) == 192
-    assert len(new["posts"]) == 326
-    assert len(feed) == 257
-    assert sum(len(p["images"]) for p in new["posts"]) == 431
+    assert len(new["posts"]) == 357
+    assert len(feed) == 276
+    assert sum(len(p["images"]) for p in new["posts"]) == 477
     echoes = [p for p in new["posts"] if p.get("category") == "灵感回响"]
     assert len(echoes) == 62 and sum(len(p["images"]) for p in echoes) == 79
     assert all(p.get("in_feed") is True and not p.get("prompt") for p in echoes)
@@ -69,10 +69,17 @@ def main():
     thread = new_posts["2124719959389691906"]
     assert thread["in_feed"] is True and thread["prompt_source"] == "thread" and "连体衣" in thread["prompt"]
     assert "2124718331466862876" not in new_posts
+    assert "2125573275057344808" not in new_posts
     mirror = new_posts["2124868239339753937"]
     assert mirror["in_feed"] is True and mirror["category"] == "内衣私房" and mirror["category"] not in ("其他", "偏殿")
-    assert new["profile"]["followers"] == 5665
-    assert new["profile"]["bio"] == pre["profile"]["bio"]
+    gallery = Counter(lab for p in new["posts"] for lab in (p.get("image_models") or []) if lab)
+    assert gallery["韩书允"] == 115 and gallery["林知夏"] == 23 and gallery["姜宥娜"] == 19
+    assert new["profile"]["followers"] == 5687
+    assert new["profile"]["bio"] == (
+        "Law · History · Philosophy · Faith · AI · Catholic✝️\n"
+        "AIart: https://t.co/YGd1b9oRUk\n"
+        "ASMR: https://t.co/KcaNBKvhw0"
+    )
     assert new["profile"]["name"] == pre["profile"]["name"]
     assert "灵感回响" in new["category_order"]
     media = json.load(open("data/model_media.json", encoding="utf-8"))
@@ -81,7 +88,7 @@ def main():
     blob = open("data/posts.json", encoding="utf-8").read()
     for bad in ("/workspace", "/home/", "sand-data", "x-fashion", "dataset_raw_pages"):
         assert bad not in blob
-    print(json.dumps({"archive": len(new["posts"]), "feed": len(feed), "images": sum(len(p["images"]) for p in new["posts"]), "echoes": len(echoes), "韩书允": 5, "林知夏": 2, "姜宥娜": 8}, ensure_ascii=False))
+    print(json.dumps({"archive": len(new["posts"]), "feed": len(feed), "images": sum(len(p["images"]) for p in new["posts"]), "echoes": len(echoes), "galleries": dict(gallery)}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
