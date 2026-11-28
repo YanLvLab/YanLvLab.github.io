@@ -56,9 +56,9 @@ def main():
     feed = [p for p in new["posts"] if p.get("in_feed") is not False and not p.get("suppressed")]
     assert len(old["posts"]) == 152
     assert len(pre["posts"]) == 192
-    assert len(new["posts"]) == 377
-    assert len(feed) == 294
-    assert sum(len(p["images"]) for p in new["posts"]) == 504
+    assert len(new["posts"]) == 385
+    assert len(feed) == 300
+    assert sum(len(p["images"]) for p in new["posts"]) == 518
     echoes = [p for p in new["posts"] if p.get("category") == "灵感回响"]
     assert len(echoes) == 62 and sum(len(p["images"]) for p in echoes) == 79
     assert all(p.get("in_feed") is True and not p.get("prompt") for p in echoes)
@@ -73,8 +73,8 @@ def main():
     mirror = new_posts["2124868239339753937"]
     assert mirror["in_feed"] is True and mirror["category"] == "内衣私房" and mirror["category"] not in ("其他", "偏殿")
     gallery = Counter(lab for p in new["posts"] for lab in (p.get("image_models") or []) if lab)
-    assert gallery["韩书允"] == 119 and gallery["林知夏"] == 27 and gallery["姜宥娜"] == 19
-    assert new["profile"]["followers"] == 5710
+    assert gallery["韩书允"] == 119 and gallery["林知夏"] == 31 and gallery["姜宥娜"] == 23
+    assert new["profile"]["followers"] == 5712
     assert new["profile"]["bio"] == (
         "Law · History · Philosophy · Faith · AI · Catholic✝️\n"
         "AIart: https://t.co/YGd1b9oRUk\n"
